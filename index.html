@@ -1231,7 +1231,7 @@ try{
     $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
   };
   const refreshUI=()=>{decorate();updatePanel()};
-      window.pkbMarket={refreshUI,getPrice:id=>{const h=cache[id];return h?h.p:undefined}};
+        window.pkbMarket={refreshUI,cache,saveCache,getPrice:id=>{const h=cache[id];return h?h.p:undefined}};
     // Backup source for cards TCGdex has no price for (pokemontcg.io, also TCGplayer market prices)
   const info={};
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1457,4 +1457,63 @@ try{
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
 }catch(err){console.error('No-price flag patch failed:',err)}
+</script><script>
+/* PATCH: sync market prices between devices through Supabase. Needs the market-value patch. To undo: delete this whole <script> block. */
+try{
+  const mk=window.pkbMarket,cache=mk.cache;
+  const remote={}; // card_id -> time (ms) of the copy stored in Supabase
+  const idsInBinders=()=>new Set(binders.flatMap(b=>b.pages.flatMap(p=>p.cards.filter(c=>c&&c.id).map(c=>String(c.id)))));
+  let syncing=false;
+
+  // Bring newer prices down from Supabase
+  const pull=async()=>{
+    for(const k of Object.keys(remote))delete remote[k];
+    let from=0,changed=false;
+    for(;;){
+      const {data,error}=await supabaseClient.from('family_card_prices').select('card_id,price,checked_at').eq('family_id',signedInUser.id).order('card_id').range(from,from+999);
+      if(error){console.warn('Prices not synced:',error.message);return false}
+      for(const r of data||[]){
+        const id=String(r.card_id),t=Date.parse(r.checked_at)||0;
+        remote[id]=t;
+        const local=cache[id];
+        if(!local||t>local.t){cache[id]={p:r.price!=null?Number(r.price):null,t,fb:1};changed=true}
+      }
+      if(!data||data.length<1000)break;
+      from+=1000;
+    }
+    if(changed){mk.saveCache();mk.refreshUI()}
+    return true;
+  };
+
+  // Send this device's newer prices up to Supabase
+  const push=async()=>{
+    const rows=[];
+    for(const id of idsInBinders()){
+      const h=cache[id];if(!h)continue;
+      if(remote[id]==null||h.t>remote[id])rows.push({family_id:signedInUser.id,card_id:id,price:h.p!=null?h.p:null,checked_at:new Date(h.t).toISOString()});
+    }
+    for(let i=0;i<rows.length;i+=200){
+      const chunk=rows.slice(i,i+200);
+      const {error}=await supabaseClient.from('family_card_prices').upsert(chunk,{onConflict:'family_id,card_id'});
+      if(error){console.warn('Prices not saved:',error.message);return}
+      for(const r of chunk)remote[r.card_id]=Date.parse(r.checked_at);
+    }
+  };
+
+  const sync=async()=>{
+    if(syncing||!signedInUser)return;
+    syncing=true;
+    try{if(await pull())await push()}
+    catch(e){console.warn('Price sync failed:',e)}
+    finally{syncing=false}
+  };
+
+  // Sync whenever the binder selection page opens
+  const origSL=showLibrary;
+  showLibrary=function(){origSL.apply(this,arguments);sync()};
+
+  // After you tap Refresh prices and it finishes, send the new prices up
+  new MutationObserver(()=>{if($('valStatus').textContent==='Prices updated.')push().catch(e=>console.warn(e))})
+    .observe($('valStatus'),{childList:true,characterData:true,subtree:true});
+}catch(err){console.error('Price sync patch failed:',err)}
 </script></body></html>
