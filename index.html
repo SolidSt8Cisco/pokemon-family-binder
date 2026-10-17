@@ -379,7 +379,6 @@ $('importFile').onchange=async e=>{
     if(!payload||payload.format!=='pokemon-family-binder-backup-v3')throw new Error('Unrecognized backup file format.');
     if(!Array.isArray(payload.binders)||!payload.binders.length)throw new Error('Backup contains no binders.');
     const totalCards=payload.binders.reduce((n,b)=>n+(Array.isArray(b.pages)?b.pages.reduce((m,p)=>m+(Array.isArray(p.cards)?p.cards.filter(Boolean).length:0),0):0),0);
-    setStatus('libraryStatus','Importing '+payload.binders.length+' binder'+(payload.binders.length===1?'':'s')+' ('+totalCards+' card'+(totalCards===1?'':'s')+')…');
     let importedBinders=0,importedCards=0,importedCovers=0;
     for(const src of payload.binders){
       const baseName=(src.name||'Imported Binder').trim().slice(0,80)||'Imported Binder';
