@@ -40,14 +40,18 @@ function showBinder(id){activeBinderId=id;activePageIndex=0;$('libraryView').cla
 
 /* ---------- Collection list ---------- */
 function renderCollection(){
-  const q=$('collQuery').value.trim().toLowerCase(),all=[];
-  for(const b of binders)for(const p of b.pages)p.cards.forEach((c,i)=>{if(c)all.push({card:c,binder:b.name,page:p.pageNumber,slot:i+1})});
-  const owned={};all.forEach(x=>{owned[x.card.id]=(owned[x.card.id]||0)+1});
-  all.sort((a,b)=>a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'})||String(a.card.id).localeCompare(String(b.card.id)));
-  const shown=q?all.filter(x=>x.card.name.toLowerCase().includes(q)||String(x.card.id).toLowerCase().includes(q)):all;
-  const list=$('collList');list.innerHTML='';
-  setStatus('collCount',q?`${shown.length} match${shown.length===1?'':'es'} for "${$('collQuery').value.trim()}" (${all.length} cards total)`:`${all.length} card${all.length===1?'':'s'} in your collection`);
-  for(const x of shown){
+const q=$('collQuery').value.trim().toLowerCase(),all=[];
+for(const b of binders)for(const p of b.pages)p.cards.forEach((c,i)=>{if(c)all.push({card:c,binder:b.name,page:p.pageNumber,slot:i+1})});
+const owned={};all.forEach(x=>{owned[x.card.id]=(owned[x.card.id]||0)+1});
+const list=$('collList');list.innerHTML='';
+if(!q){
+  setStatus('collCount',`${all.length} card${all.length===1?'':'s'} in your collection. Start typing to search.`);
+  return;
+}
+all.sort((a,b)=>a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'})||String(a.card.id).localeCompare(String(b.card.id)));
+const shown=all.filter(x=>x.card.name.toLowerCase().includes(q)||String(x.card.id).toLowerCase().includes(q));
+setStatus('collCount',`${shown.length} match${shown.length===1?'':'es'} for "${$('collQuery').value.trim()}" (${all.length} cards total)`);
+for(const x of shown){
     const row=document.createElement('button');row.type='button';row.className='item';
     row.setAttribute('aria-label','View '+x.card.name);
     const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=x.card.image.replace('/high.','/low.');
