@@ -1076,7 +1076,7 @@ try{
     if(error)throw new Error('Could not upload photo: '+error.message);
     return supabaseClient.storage.from('Pokemon').getPublicUrl(path).data.publicUrl;
   };
-
+ const findSavedPhoto=id=>{for(const bn of binders)for(const p of bn.pages)for(const card of p.cards)if(card&&card.id===id&&card.image)return card.image;return null};
   // Swap in a new binder search form (this removes the old handler without editing it)
   const oldForm=$('inlineSearchForm'),form=oldForm.cloneNode(true);
   oldForm.replaceWith(form);
@@ -1106,17 +1106,20 @@ try{
           badge.textContent=ownedCount>1?'Owned ×'+ownedCount:'Owned';b.append(badge);
         }
         b.onclick=async()=>{
-          let photoFile=null;
+                    let photoFile=null,savedPhoto=null;
           if(!c.image){
-            photoFile=await pickPhoto(); // must run first so the browser allows the picker
-            if(!photoFile){setStatus(statusId,'This card has no picture on TCGdex. Choose a photo of your card to add it.');return}
+            savedPhoto=findSavedPhoto(c.id);
+            if(!savedPhoto){
+              photoFile=await pickPhoto(); // must run first so the browser allows the picker
+              if(!photoFile){setStatus(statusId,'This card has no picture on TCGdex. Choose a photo of your card to add it.');return}
+            }
           }
           b.disabled=true;
           try{
             let full=c;
             const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
             if(r.ok)full=await r.json();
-            const image=cardImageUrl(full.image||c.image,'high')||await uploadCardPhoto(photoFile);
+            const image=cardImageUrl(full.image||c.image,'high')||savedPhoto||await uploadCardPhoto(photoFile);
             const card={id:full.id||c.id,name:full.name||c.name,image,setName:(full.set&&full.set.name)||(c.set&&c.set.name)||'',localId:full.localId||c.localId||'',purchasePrice:null};
             const spot=addToNextBlank(card);
             renderBinder();
