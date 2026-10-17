@@ -413,7 +413,6 @@ $('importFile').onchange=async e=>{
       importedBinders++;importedCards+=cardRows.length;if(src.cover_image)importedCovers++;
     }
     renderLibrary();renderCollection();
-    setStatus('libraryStatus','Imported '+importedBinders+' binder'+(importedBinders===1?'':'s')+' and '+importedCards+' card'+(importedCards===1?'':'s')+'.'+(importedCovers?'' :' (No cover images were included in this backup.)'));
   }catch(err){
     console.error(err);
     setStatus('libraryStatus','Import failed: '+(err.message||'unknown error'));
