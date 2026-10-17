@@ -1142,4 +1142,37 @@ try{
     }
   });
 }catch(err){console.error('Patch failed:',err)}
+</script><script>
+/* PATCH: edit "price I paid" from the card pop-up. To undo: delete this whole <script> block. */
+try{
+  const origOpen=openCardModal;
+  $('cardModalMeta').insertAdjacentHTML('afterend',
+    '<div class="row" style="justify-content:center;gap:8px;margin-top:12px"><label for="priceInput" class="note">Price I paid ($)</label><input id="priceInput" class="field" type="number" step="0.01" min="0" placeholder="0.00" style="width:110px"><button id="priceSaveBtn" type="button">Save</button></div><p id="priceMsg" class="status" aria-live="polite" style="text-align:center"></p>');
+  let editing=null;
+  const findBinder=card=>binders.find(b=>b.pages.some(p=>p.cards.includes(card)));
+  openCardModal=function(card){
+    origOpen(card);
+    editing=card;
+    $('priceInput').value=card.purchasePrice!=null?String(card.purchasePrice):'';
+    $('priceMsg').textContent='';
+  };
+  const save=async()=>{
+    const card=editing;if(!card)return;
+    const b=findBinder(card);
+    if(!b){$('priceMsg').textContent='Could not find this card in a binder.';return}
+    const raw=$('priceInput').value.trim();
+    const val=raw===''?null:Number(raw);
+    if(val!==null&&(isNaN(val)||val<0)){$('priceMsg').textContent='Enter a price of 0 or more, or leave blank to clear it.';return}
+    card.purchasePrice=val;
+    const parts=[card.id,card.setName,card.localId?'#'+card.localId:''].filter(Boolean);
+    if(val!=null)parts.push('Bought $'+val.toFixed(2));
+    $('cardModalMeta').textContent=parts.join(' · ');
+    $('priceMsg').textContent='Saving…';
+    renderCards();
+    await pushBinder(b.id);
+    $('priceMsg').textContent=$('saveDot').classList.contains('error')?'Could not save. Check your connection and try again.':'Saved.';
+  };
+  $('priceSaveBtn').onclick=save;
+  $('priceInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save()}});
+}catch(err){console.error('Price patch failed:',err)}
 </script></body></html>
