@@ -8,8 +8,10 @@
 .icon-row{gap:8px;align-items:center}
 .icon-row-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;line-height:1;padding:8px 12px}
 .icon-row-btn svg{display:block}
+.binder-tile .tile-delete{position:absolute;top:5px;right:5px;z-index:2;padding:4px 8px;background:#111c2dee;border-color:#718198;font-size:1rem;line-height:1;color:var(--text)}
+.binder-tile .tile-delete:hover{background:var(--danger);border-color:var(--danger)}
 :root{color-scheme:dark;--bg:#101722;--panel:#1a2534;--line:#35465c;--text:#f3f6fb;--muted:#b6c2d2;--accent:#ffd34e;--danger:#a74355}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}header{position:sticky;top:0;z-index:3;background:#18212ff2;backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:12px max(14px,env(safe-area-inset-left));display:flex;align-items:center;justify-content:space-between;gap:12px}h1{font-size:1.2rem;margin:0}h2{font-size:1.15rem;margin:0}button,input{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:10px;background:#26364a;color:var(--text);padding:10px 13px}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.wrap{max-width:1050px;margin:auto;padding:18px 14px 42px}.sub{color:var(--muted);font-size:.92rem;margin:4px 0 18px}.note{color:var(--muted);font-size:.82rem}.panel{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:15px;margin-bottom:16px}.field{width:100%;min-width:0;background:#101722;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}.grow{flex:1}.hidden{display:none!important}.status{color:var(--muted);min-height:1.5em;font-size:.9rem}.library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.binder-tile{padding:0;aspect-ratio:2.5/3.5;min-width:0;position:relative;overflow:hidden;border-radius:13px;border:1px solid var(--line);background:#1d2a3b;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;text-align:left}.binder-tile img{width:100%;height:100%;position:absolute;inset:0;object-fit:fill}.binder-tile .cover-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.1rem;color:var(--accent);background:linear-gradient(145deg,#293b52,#141d2a)}.binder-tile .tile-footer{position:absolute;left:0;right:0;bottom:0;background:#080d16db;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;z-index:1}.binder-tile .tile-count{font-size:.72rem;color:var(--muted);line-height:1.2}.binder-tile .tile-name{font-weight:650;font-size:.9rem;color:var(--text);line-height:1.2;text-align:center;overflow-wrap:anywhere}.binder-tile.add-tile{align-items:center;justify-content:center;border-style:dashed;background:transparent;text-align:center}.plus{font-size:3.5rem;color:var(--accent);line-height:1}.add-label{font-size:.9rem;color:var(--muted)}.pagebar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0}.pagebar .group{display:flex;gap:8px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.slot{position:relative;aspect-ratio:2.5/3.5;min-width:0;border:1px solid var(--line);border-radius:12px;background:linear-gradient(145deg,#202d3e,#151e2b);overflow:hidden;display:flex;align-items:center;justify-content:center}.slot.empty{border-style:dashed}.slot img.card-img{width:100%;height:100%;object-fit:contain;background:#111a26}.cardtools{position:absolute;top:5px;right:5px;display:flex;gap:4px}.cardtools button{padding:5px 8px;background:#111c2ddd;border-color:#718198}.slotlabel{position:absolute;bottom:0;left:0;right:0;padding:4px 5px;background:transparent;color:var(--text);font-size:.72rem;text-align:center;overflow-wrap:anywhere;text-shadow:0 1px 3px #000,0 0 6px #000;pointer-events:none;opacity:.85}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.modal{position:fixed;inset:0;background:#05080dcc;z-index:10;display:none;align-items:center;justify-content:center;padding:12px}.modal.open{display:flex}.dialog{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(760px,100%);max-height:92dvh;overflow:auto;padding:16px}.dialoghead{display:flex;justify-content:space-between;align-items:center;gap:10px}.searchrow{display:flex;gap:8px;margin:14px 0}.searchrow input{min-width:0;flex:1}.results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.result{border:1px solid var(--line);background:#111b28;border-radius:10px;padding:7px;text-align:left;min-width:0}.result img{display:block;width:100%;aspect-ratio:2.5/3.5;object-fit:contain}.result strong{display:block;font-size:.85rem;margin-top:6px}.result small{display:block;color:var(--muted);font-size:.75rem}.close{font-size:1.25rem;padding:5px 11px}.cover-preview{width:88px;aspect-ratio:2.5/3.5;height:auto;object-fit:fill;border:1px solid var(--line);border-radius:10px;background:#101722}
-.primary{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700;width:100%;padding:14px}.list{display:grid;gap:8px;margin-top:10px}.item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:#111b28;border-radius:10px;padding:6px;color:var(--text);text-align:left;cursor:pointer;font:inherit}.item:hover{background:#16222f}.item:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.item img{width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none}.item .meta{min-width:0}.item strong{display:block;overflow-wrap:anywhere}.item small{color:var(--muted)}.badge{margin-left:auto;background:var(--accent);color:#101722;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem;flex:none}
+.primary{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700;width:100%;padding:14px}.danger{background:#472b34;border-color:#79424f}.danger:hover{background:#5a3441}.list{display:grid;gap:8px;margin-top:10px}.item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:#111b28;border-radius:10px;padding:6px;color:var(--text);text-align:left;cursor:pointer;font:inherit}.item:hover{background:#16222f}.item:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.item img{width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none}.item .meta{min-width:0}.item strong{display:block;overflow-wrap:anywhere}.item small{color:var(--muted)}.badge{margin-left:auto;background:var(--accent);color:#101722;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem;flex:none}
 @media(min-width:620px){.library-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.grid{gap:14px}.wrap{padding-top:24px}.slot{max-height:420px}.results{grid-template-columns:repeat(4,minmax(0,1fr))}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:900px){.library-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:380px){.grid{gap:6px}.wrap{padding-left:8px;padding-right:8px}.slotlabel{font-size:.63rem}.tile-name{font-size:.85rem}}
 </style></head>
 <body>
@@ -26,6 +28,7 @@
 <div class="modal" id="searchModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="dialog"><div class="dialoghead"><h2 id="modalTitle">Find a Pokémon card</h2><button class="close" id="closeSearchBtn" aria-label="Close search">×</button></div><form id="searchForm" class="searchrow"><input id="query" class="field" placeholder="Search by Pokémon or card name…" autocomplete="off" required><button type="submit">Search</button></form><p id="searchStatus" class="status" aria-live="polite"></p><div id="results" class="results"></div></div></div>
 <div class="modal" id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"><div class="dialog" style="width:min(520px,100%);text-align:center"><div class="dialoghead"><h2 id="cardModalTitle">Card</h2><button class="close" id="closeCardBtn" aria-label="Close">×</button></div><img id="cardModalImg" alt="" style="width:100%;max-height:70dvh;object-fit:contain;border-radius:10px;background:#111a26;margin-top:12px"><p id="cardModalMeta" class="note" style="margin-top:10px"></p></div></div>
 <div class="modal" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="nameModalTitle">Binder name</h2><button class="close" id="closeNameBtn" aria-label="Close">×</button></div><form id="nameForm" style="margin-top:12px"><input id="nameInput" class="field" type="text" maxlength="80" autocomplete="off" required><p id="nameError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="nameCancelBtn">Cancel</button><button type="submit" id="nameSaveBtn" class="primary" style="width:auto;padding:10px 18px">Save</button></div></form></div></div>
+<div class="modal" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="deleteModalTitle">Delete binder</h2><button class="close" id="closeDeleteBtn" aria-label="Close">×</button></div><p id="deleteModalText" class="sub" style="margin-top:12px"></p><p id="deleteError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="deleteCancelBtn">Cancel</button><button type="button" id="deleteConfirmBtn" class="danger">Delete binder</button></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL='https://whbuikfheckjebgeglpu.supabase.co';
@@ -35,6 +38,7 @@ const $=id=>document.getElementById(id);
 let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, activeSlot=null, lastFocus=null, cloudBusy=false, saveTimers={};
 let lastDeleted=null;
 let nameModalMode=null;
+let pendingDeleteId=null;
 const blankCards=()=>Array(9).fill(null);
 function setStatus(id,msg){$(id).textContent=msg}
 function currentBinder(){return binders.find(b=>b.id===activeBinderId)||null}
@@ -135,6 +139,74 @@ $('nameForm').addEventListener('submit',async e=>{
   }
 });
 
+/* ---------- Delete modal ---------- */
+function openDeleteModal(binderId){
+  const b=binders.find(x=>x.id===binderId);
+  if(!b)return;
+  pendingDeleteId=binderId;
+  const count=b.pages.reduce((n,p)=>n+p.cards.filter(Boolean).length,0);
+  $('deleteModalText').textContent='Delete "'+b.name+'" and all '+count+' card'+(count===1?'':'s')+' in it? This cannot be undone.';
+  $('deleteError').textContent='';
+  $('deleteModal').classList.add('open');
+  lastFocus=document.activeElement;
+  $('deleteCancelBtn').focus();
+}
+function closeDeleteModal(){
+  $('deleteModal').classList.remove('open');
+  $('deleteError').textContent='';
+  pendingDeleteId=null;
+  if(lastFocus&&lastFocus.focus)lastFocus.focus();
+}
+$('closeDeleteBtn').onclick=closeDeleteModal;
+$('deleteCancelBtn').onclick=closeDeleteModal;
+$('deleteModal').addEventListener('click',e=>{if(e.target===$('deleteModal'))closeDeleteModal()});
+$('deleteConfirmBtn').onclick=async()=>{
+  if(!pendingDeleteId)return;
+  const id=pendingDeleteId;
+  const b=binders.find(x=>x.id===id);
+  if(!b){closeDeleteModal();return}
+  $('deleteConfirmBtn').disabled=true;
+  $('deleteError').textContent='Deleting…';
+  try{
+    await deleteBinder(id);
+    closeDeleteModal();
+  }catch(err){
+    console.error(err);
+    $('deleteError').textContent='Delete failed: '+(err.message||'unknown error');
+  }finally{
+    $('deleteConfirmBtn').disabled=false;
+  }
+};
+
+async function deleteBinder(binderId){
+  if(!signedInUser)throw new Error('You are not signed in.');
+  const b=binders.find(x=>x.id===binderId);
+  if(!b)throw new Error('Binder not found.');
+  // 1. cards
+  const {error:cardErr}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',binderId);
+  if(cardErr)throw new Error('Could not delete cards: '+cardErr.message);
+  // 2. pages
+  const {error:pageErr}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',binderId);
+  if(pageErr)throw new Error('Could not delete pages: '+pageErr.message);
+  // 3. binder
+  const {error:bErr}=await supabaseClient.from('family_binders').delete().eq('id',binderId).eq('family_id',signedInUser.id);
+  if(bErr)throw new Error('Could not delete binder: '+bErr.message);
+  // 4. optional: remove cover image from storage if it points into our bucket
+  if(b.cover_image&&b.cover_image.includes('/storage/v1/object/public/Pokemon/')){
+    const marker='/storage/v1/object/public/Pokemon/';
+    const idx=b.cover_image.indexOf(marker);
+    if(idx!==-1){
+      const path=decodeURIComponent(b.cover_image.slice(idx+marker.length));
+      if(path)try{await supabaseClient.storage.from('Pokemon').remove([path])}catch(e){console.warn('Cover cleanup skipped:',e)}
+    }
+  }
+  // 5. in-memory
+  binders=binders.filter(x=>x.id!==binderId);
+  if(activeBinderId===binderId)activeBinderId=null;
+  renderLibrary();renderCollection();
+  setStatus('libraryStatus','Deleted "'+b.name+'".');
+}
+
 function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const binder of binders){
   const count=binder.pages.reduce((n,p)=>n+p.cards.filter(Boolean).length,0);
   const btn=document.createElement('button');btn.type='button';btn.className='binder-tile';btn.setAttribute('aria-label','Open '+binder.name);
@@ -146,7 +218,12 @@ function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const
   footer.append(countEl,name);
   btn.append(footer);
   btn.onclick=()=>showBinder(binder.id);
-  grid.append(btn);
+  // delete button (sibling overlay, not nested in the tile button)
+  const del=document.createElement('button');del.type='button';del.className='tile-delete';del.textContent='×';del.title='Delete binder';del.setAttribute('aria-label','Delete '+binder.name);
+  del.onclick=(ev)=>{ev.stopPropagation();openDeleteModal(binder.id)};
+  const wrap=document.createElement('div');wrap.style.cssText='position:relative;min-width:0';
+  wrap.append(btn,del);
+  grid.append(wrap);
 }const add=document.createElement('button');add.type='button';add.className='binder-tile add-tile';add.innerHTML='<span class="plus" aria-hidden="true">+</span><span class="add-label">Add binder</span>';add.onclick=()=>openNameModal('create','New Pokémon Binder');grid.append(add)}
 function renderBinder(){const b=currentBinder();if(!b){showLibrary();return}while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();if(!b.pages.length)b.pages=[{pageNumber:1,cards:blankCards()}];activePageIndex=Math.min(Math.max(0,activePageIndex),b.pages.length-1);$('activeBinderName').textContent=b.name;$('activeCover').classList.toggle('hidden',!b.cover_image);if(b.cover_image)$('activeCover').src=b.cover_image;renderCards();$('pageLabel').textContent=`Page ${activePageIndex+1} of ${b.pages.length}`;$('prevPageBtn').disabled=activePageIndex===0;$('nextPageBtn').disabled=activePageIndex>=b.pages.length-1;}
 function renderCards(){const grid=$('cardGrid');grid.innerHTML='';const p=currentPage();if(!p)return;p.cards.forEach((card,i)=>{const slot=document.createElement('div');slot.className='slot'+(card?'':' empty');slot.setAttribute('aria-label',card?`${card.name}, slot ${i+1}`:`Empty slot ${i+1}`);if(card){const imgBtn=document.createElement('button');imgBtn.type='button';imgBtn.style.cssText='display:block;width:100%;height:100%;padding:0;border:none;background:transparent;cursor:zoom-in';const img=document.createElement('img');img.className='card-img';img.src=card.image;img.alt=card.name;img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='contain';img.onerror=()=>{img.alt='Card image unavailable';img.style.display='none'};imgBtn.append(img);imgBtn.onclick=()=>openCardModal(card);slot.append(imgBtn);const tools=document.createElement('div');tools.className='cardtools';const remove=document.createElement('button');remove.textContent='×';remove.title='Remove card';remove.setAttribute('aria-label','Remove '+card.name);remove.onclick=()=>deleteCardWithUndo(i);tools.append(remove);slot.append(tools);const label=document.createElement('div');label.className='slotlabel';label.textContent=card.name;slot.append(label)}grid.append(slot)})}
@@ -278,7 +355,8 @@ function closeSearch(){$('searchModal').classList.remove('open');if(lastFocus&&l
 $('closeSearchBtn').onclick=closeSearch;$('searchModal').addEventListener('click',e=>{if(e.target===$('searchModal'))closeSearch()});
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
-  if($('nameModal').classList.contains('open'))closeNameModal();
+  if($('deleteModal').classList.contains('open'))closeDeleteModal();
+  else if($('nameModal').classList.contains('open'))closeNameModal();
   else if($('cardModal').classList.contains('open'))closeCardModal();
   else closeSearch();
 });
