@@ -355,7 +355,7 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
     const data=await response.json();
     const matches=(Array.isArray(data)?data:[]).filter(c=>c.image);
     if(!matches.length){setStatus(statusId,'No matching cards found. Try a shorter name.');return}
-    setStatus(statusId,`Found ${matches.length} result${matches.length===1?'':'s'}. Tap the card you own.`);
+    setStatus(statusId,`Found ${matches.length} result${matches.length===1?'':'s'}.`);
     for(const c of matches.slice(0,50)){
       const b=document.createElement('button');b.type='button';b.className='result';
       const img=document.createElement('img');img.loading='lazy';img.alt=c.name;img.src=cardImageUrl(c.image,'low');
