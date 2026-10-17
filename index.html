@@ -1,4 +1,4 @@
-<!doctype html>
+a<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -354,7 +354,7 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
     if(!response.ok)throw new Error('Card service returned HTTP '+response.status);
     const data=await response.json();
     const matches=(Array.isArray(data)?data:[]).filter(c=>c.image);
-    if(!matches.length){setStatus(statusId,'No matching cards found. Try a shorter name.');return}
+    if(!matches.length){setStatus(statusId,'No matching cards found.');return}
     setStatus(statusId,`Found ${matches.length} result${matches.length===1?'':'s'}.`);
     for(const c of matches.slice(0,50)){
       const b=document.createElement('button');b.type='button';b.className='result';
