@@ -439,7 +439,17 @@ function extractPrice(full){
     if(p!=null&&p>0){value=p;break}
   }
   if(value==null)return null;
-  const updated=tp.updated?new Date(tp.updated*1000).toISOString():null;
+  let updated=null;
+  const raw=tp.updated;
+  if(raw){
+    if(typeof raw==='number'){
+      const d=new Date(raw*1000);
+      if(!isNaN(d.getTime()))updated=d.toISOString();
+    } else {
+      const d=new Date(raw);
+      if(!isNaN(d.getTime()))updated=d.toISOString();
+    }
+  }
   return {value,currency:'USD',updated};
 }
 function fmtUSD(v){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v)}
