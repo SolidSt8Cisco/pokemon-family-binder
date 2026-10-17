@@ -13,7 +13,7 @@
 @media(min-width:620px){.library-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.grid{gap:14px}.wrap{padding-top:24px}.slot{max-height:420px}.results{grid-template-columns:repeat(4,minmax(0,1fr))}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:900px){.library-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:380px){.grid{gap:6px}.wrap{padding-left:8px;padding-right:8px}.slotlabel{font-size:.63rem}.tile-name{font-size:.85rem}}
 </style></head>
 <body>
-<header><h1>⚡ Pokémon Family Binder</h1><div class="row"><button id="exportBtn" type="button">Export backup</button><button id="signOutBtn" type="button" class="hidden">Sign out</button></div></header>
+<header><div class="row" style="margin-left:auto"><button id="exportBtn" type="button">Export backup</button><button id="signOutBtn" type="button" class="hidden">Sign out</button></div></header>
 <main class="wrap">
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
