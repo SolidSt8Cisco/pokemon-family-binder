@@ -272,8 +272,6 @@ function sortBinderAlphabetically(b){
       lastPage=p.pageNumber;lastSlot=i+1;
     }
   }
-  const lastIdx=b.pages.findIndex(p=>p.pageNumber===lastPage);
-  if(lastIdx>=0)activePageIndex=lastIdx;
   return {page:lastPage,slot:lastSlot};
 }
 function deleteCardWithUndo(slotIndex){
