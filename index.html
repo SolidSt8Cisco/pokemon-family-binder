@@ -22,6 +22,7 @@
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
 <div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><p id="collCount" class="status" aria-live="polite"></p><div id="collList" class="list"></div></div>
+<div class="panel hidden" id="backfillPanel"><p class="sub" style="margin:0 0 8px" id="backfillMsg"></p><button id="backfillBtn" type="button" class="primary" style="width:auto;padding:10px 16px">Fill missing card details</button><p id="backfillStatus" class="status" aria-live="polite" style="margin-top:8px"></p></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
 <section id="binderView" class="hidden"><div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="backBtn" type="button" class="icon-row-btn">← All binders</button><div class="row icon-row"><button id="renameBtn" type="button" class="icon-row-btn" aria-label="Rename" title="Rename"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button><button id="coverBtn" type="button" class="icon-row-btn" aria-label="Change picture" title="Change picture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button><input id="coverFile" type="file" accept="image/*" class="hidden"></div></div><div class="row" style="gap:12px;align-items:center"><img id="activeCover" class="cover-preview hidden" alt="Binder cover"><div class="grow"><h2 id="activeBinderName">Binder</h2></div></div>
 <div class="panel" style="margin-top:12px"><form id="inlineSearchForm" class="searchrow" style="margin:0"><input id="inlineQuery" class="field" type="search" placeholder="Search by Pokémon or card name…" autocomplete="off"><button type="submit">Search</button></form><p id="inlineSearchStatus" class="status" aria-live="polite"></p><div id="inlineResults" class="results"></div></div>
@@ -46,8 +47,8 @@ function setStatus(id,msg){$(id).textContent=msg}
 function currentBinder(){return binders.find(b=>b.id===activeBinderId)||null}
 function currentPage(){const b=currentBinder();return b?b.pages[activePageIndex]||null:null}
 function normalizePageNumber(n){const x=Number(n);return Number.isInteger(x)&&x>=1?x:1}
-function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.toggle('hidden',logged);$('signOutBtn').classList.toggle('hidden',!logged);if(!logged){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden')}}
-function showLibrary(){activeBinderId=null;$('binderView').classList.add('hidden');$('libraryView').classList.remove('hidden');renderLibrary();renderCollection()}
+function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.toggle('hidden',logged);$('signOutBtn').classList.toggle('hidden',!logged);if(!logged){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('backfillPanel').classList.add('hidden')}}
+function showLibrary(){activeBinderId=null;$('binderView').classList.add('hidden');$('libraryView').classList.remove('hidden');renderLibrary();renderCollection();refreshBackfillPanel()}
 function showBinder(id){activeBinderId=id;activePageIndex=0;$('libraryView').classList.add('hidden');$('binderView').classList.remove('hidden');renderBinder()}
 
 /* ---------- Collection list ---------- */
@@ -265,6 +266,78 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pagehide',()=>{if(pendingSave)flushPendingSave()});
 window.addEventListener('beforeunload',(e)=>{if(pendingSave){e.preventDefault();e.returnValue='';return ''}});
 
+/* ---------- Backfill missing metadata ---------- */
+async function countMissingMetadata(){
+  if(!signedInUser)return 0;
+  const {count,error}=await supabaseClient.from('family_binder_cards')
+    .select('card_id',{count:'exact',head:true})
+    .eq('family_id',signedInUser.id)
+    .or('set_name.is.null,local_id.is.null');
+  if(error){console.warn('Count failed:',error);return 0}
+  return count||0;
+}
+async function refreshBackfillPanel(){
+  if(!signedInUser){$('backfillPanel').classList.add('hidden');return}
+  const n=await countMissingMetadata();
+  if(n>0){
+    $('backfillPanel').classList.remove('hidden');
+    $('backfillMsg').textContent=n+' card'+(n===1?'':'s')+' missing set and card-number details.';
+  } else {
+    $('backfillPanel').classList.add('hidden');
+    setStatus('backfillStatus','');
+  }
+}
+$('backfillBtn').onclick=async()=>{
+  if(!signedInUser)return;
+  const btn=$('backfillBtn');
+  btn.disabled=true;
+  try{
+    const {data:rows,error}=await supabaseClient.from('family_binder_cards')
+      .select('family_id,binder_id,page_number,slot_number,card_id,set_name,local_id')
+      .eq('family_id',signedInUser.id)
+      .or('set_name.is.null,local_id.is.null');
+    if(error)throw error;
+    const total=rows.length;
+    if(!total){setStatus('backfillStatus','Nothing to fill.');btn.disabled=false;return}
+    let done=0,failed=0;
+    for(const row of rows){
+      setStatus('backfillStatus',`Filling ${done+1}/${total}…`);
+      try{
+        const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(row.card_id));
+        if(!r.ok){failed++;continue}
+        const full=await r.json();
+        const setName=full.set?.name||null;
+        const localId=full.localId?String(full.localId):null;
+        if(!setName&&!localId){failed++;continue}
+        const {error:upErr}=await supabaseClient.from('family_binder_cards')
+          .update({set_name:setName,local_id:localId})
+          .eq('family_id',signedInUser.id)
+          .eq('binder_id',row.binder_id)
+          .eq('page_number',row.page_number)
+          .eq('slot_number',row.slot_number);
+        if(upErr){failed++;continue}
+        done++;
+        const b=binders.find(x=>x.id===row.binder_id);
+        if(b){
+          const pg=b.pages.find(p=>p.pageNumber===row.page_number);
+          if(pg&&row.slot_number>=1&&row.slot_number<=9){
+            const card=pg.cards[row.slot_number-1];
+            if(card){card.setName=setName||'';card.localId=localId||''}
+          }
+        }
+      }catch(e){failed++;console.warn('Backfill failed for',row.card_id,e)}
+    }
+    setStatus('backfillStatus',`Done. Filled ${done} card${done===1?'':'s'}${failed?', '+failed+' failed':''}.`);
+    renderBinder();
+    setTimeout(refreshBackfillPanel,1500);
+  }catch(err){
+    console.error(err);
+    setStatus('backfillStatus','Backfill failed: '+(err.message||'unknown error'));
+  }finally{
+    btn.disabled=false;
+  }
+};
+
 $('backBtn').onclick=()=>showLibrary();$('prevPageBtn').onclick=()=>{if(activePageIndex>0){activePageIndex--;renderBinder()}};$('nextPageBtn').onclick=()=>{const b=currentBinder();if(b&&activePageIndex<b.pages.length-1){activePageIndex++;renderBinder()}};
 
 /* ---------- Adding cards ---------- */
@@ -459,6 +532,7 @@ $('importFile').onchange=async e=>{
       importedBinders++;importedCards+=cardRows.length;if(src.cover_image)importedCovers++;
     }
     renderLibrary();renderCollection();
+    refreshBackfillPanel();
   }catch(err){
     console.error(err);
     setStatus('libraryStatus','Import failed: '+(err.message||'unknown error'));
