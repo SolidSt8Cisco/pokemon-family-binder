@@ -837,6 +837,40 @@ function describeSearch(matches,name,num){
   const n=matches.length;
   return num?`Found ${n} match${n===1?'':'es'} for ${name} #${num}.`:`Found ${n} result${n===1?'':'s'}. Tip: add the card number (like "${name} #104") to narrow it down.`;
 }
+/* ---------- Your own photo for cards TCGdex has no picture for ---------- */
+const photoInput=document.createElement('input');
+photoInput.type='file';photoInput.accept='image/*';photoInput.className='hidden';
+document.body.append(photoInput);
+function pickPhoto(){
+  return new Promise(resolve=>{
+    photoInput.value='';
+    photoInput.onchange=()=>resolve((photoInput.files&&photoInput.files[0])||null);
+    photoInput.oncancel=()=>resolve(null);
+    photoInput.click();
+  });
+}
+function shrinkPhoto(file,max=900){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Could not read that image.'))};
+    img.onload=()=>{
+      const s=Math.min(1,max/Math.max(img.width,img.height)),cv=document.createElement('canvas');
+      cv.width=Math.round(img.width*s);cv.height=Math.round(img.height*s);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      URL.revokeObjectURL(url);
+      cv.toBlob(b=>b?resolve(b):reject(new Error('Could not compress image.')),'image/jpeg',.82);
+    };
+    img.src=url;
+  });
+}
+async function uploadCardPhoto(file){
+  if(!file)throw new Error('No photo chosen.');
+  const blob=await shrinkPhoto(file);
+  const path=`public/card-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+  const {error}=await supabaseClient.storage.from('Pokemon').upload(path,blob,{contentType:'image/jpeg'});
+  if(error)throw new Error('Could not upload photo: '+error.message);
+  return supabaseClient.storage.from('Pokemon').getPublicUrl(path).data.publicUrl;
+}
 $('inlineSearchForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const q=$('inlineQuery').value.trim();
@@ -863,12 +897,17 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
         b.append(badge);
       }
       b.onclick=async()=>{
+        let photoFile=null;
+        if(!c.image){
+          photoFile=await pickPhoto(); // has to run first, or the browser blocks the picker
+          if(!photoFile){setStatus(statusId,'This card has no picture on TCGdex. Choose a photo of your card to add it.');return}
+        }
         b.disabled=true;
         try{
           let full=c;
           const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
           if(r.ok)full=await r.json();
-          const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high'),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||'',purchasePrice:null};
+          const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high')||await uploadCardPhoto(photoFile),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||'',purchasePrice:null};
           const spot=addToNextBlank(card);
           renderBinder();
           saveBinderSoon();
@@ -878,7 +917,7 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
           $('inlineQuery').focus();
         }catch(err){
           b.disabled=false;
-          setStatus(statusId,'Could not load this card. Please try again.');
+          setStatus(statusId,'Could not add this card: '+(err.message||'please try again.'));
         }
       };
       $(resultsId).append(b);
