@@ -615,10 +615,11 @@ $('cartSearchForm').addEventListener('submit',async e=>{
           $(resultsId).innerHTML='';
           $('cartQuery').value='';
           $('cartQuery').focus();
-        }catch(err){
-          b.disabled=false;
-          setStatus(statusId,'Could not add this card. Please try again.');
-        }
+}catch(err){
+  console.error('Cart add failed:',err);
+  b.disabled=false;
+  setStatus(statusId,'Could not add this card: '+(err.message||'unknown error'));
+}
       };
       $(resultsId).append(b);
     }
