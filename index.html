@@ -1,4 +1,4 @@
-a<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -37,7 +37,7 @@ const SUPABASE_URL='https://whbuikfheckjebgeglpu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_r5qzENvZgLryyZK_QKSwbQ_C19GIhj_';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const $=id=>document.getElementById(id);
-let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, lastFocus=null, cloudBusy=false, saveTimers={};
+let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, lastFocus=null, cloudBusy=false, saveTimers={}, pendingSave=false;
 let lastDeleted=null;
 let nameModalMode=null;
 let pendingDeleteId=null;
@@ -249,8 +249,22 @@ async function uploadCoverImage(file){
   const {data:urlData}=supabaseClient.storage.from('Pokemon').getPublicUrl(filePath);
   return urlData.publicUrl;
 }
-function saveBinderSoon(message){const b=currentBinder();if(!b)return;if(message)setStatus('binderStatus',message);clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
-async function pushBinder(binderId){if(!signedInUser)return;const b=binders.find(x=>x.id===binderId);if(!b)return;if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}cloudBusy=true;try{const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));if(pageRows.length){const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});if(error)throw error}const desired=[];for(const p of b.pages)p.cards.forEach((card,i)=>{if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image,set_name:card.setName||null,local_id:card.localId||null})});if(desired.length){const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});if(error)throw error}const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(readError)throw readError;const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);if(error)throw error}const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(pageReadError)throw pageReadError;const wantedPages=new Set(b.pages.map(p=>p.pageNumber));for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);if(error)throw error}}catch(e){console.error(e);setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'))}finally{cloudBusy=false}}
+function saveBinderSoon(message){const b=currentBinder();if(!b)return;if(message)setStatus('binderStatus',message);pendingSave=true;clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
+async function pushBinder(binderId){if(!signedInUser)return;const b=binders.find(x=>x.id===binderId);if(!b)return;if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}cloudBusy=true;try{const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));if(pageRows.length){const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});if(error)throw error}const desired=[];for(const p of b.pages)p.cards.forEach((card,i)=>{if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image,set_name:card.setName||null,local_id:card.localId||null})});if(desired.length){const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});if(error)throw error}const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(readError)throw readError;const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);if(error)throw error}const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(pageReadError)throw pageReadError;const wantedPages=new Set(b.pages.map(p=>p.pageNumber));for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);if(error)throw error}}catch(e){console.error(e);setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'))}finally{cloudBusy=false;pendingSave=false}}
+
+/* ---------- Unsaved-changes guard ---------- */
+async function flushPendingSave(){
+  const ids=Object.keys(saveTimers);
+  for(const id of ids){clearTimeout(saveTimers[id]);delete saveTimers[id]}
+  if(pendingSave){
+    const b=currentBinder();
+    if(b){try{await pushBinder(b.id)}catch(e){console.warn('Flush failed:',e)}}
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&pendingSave)flushPendingSave()});
+window.addEventListener('pagehide',()=>{if(pendingSave)flushPendingSave()});
+window.addEventListener('beforeunload',(e)=>{if(pendingSave){e.preventDefault();e.returnValue='';return ''}});
+
 $('backBtn').onclick=()=>showLibrary();$('prevPageBtn').onclick=()=>{if(activePageIndex>0){activePageIndex--;renderBinder()}};$('nextPageBtn').onclick=()=>{const b=currentBinder();if(b&&activePageIndex<b.pages.length-1){activePageIndex++;renderBinder()}};
 
 /* ---------- Adding cards ---------- */
@@ -429,7 +443,7 @@ $('importFile').onchange=async e=>{
         const cards=Array.isArray(pages[pi].cards)?pages[pi].cards:[];
         for(let si=0;si<9&&si<cards.length;si++){
           const c=cards[si];if(!c||!c.name||!c.image)continue;
-          cardRows.push({family_id:signedInUser.id,binder_id:newBinder.id,page_number:pageNumber,slot_number:si+1,card_id:String(c.id||''),card_name:c.name,image_url:c.image});
+          cardRows.push({family_id:signedInUser.id,binder_id:newBinder.id,page_number:pageNumber,slot_number:si+1,card_id:String(c.id||''),card_name:c.name,image_url:c.image,set_name:c.setName||null,local_id:c.localId||null});
         }
       }
       if(cardRows.length){
@@ -440,7 +454,7 @@ $('importFile').onchange=async e=>{
       const justAdded=binders[binders.length-1];
       for(const r of cardRows){
         const pg=justAdded.pages.find(p=>p.pageNumber===r.page_number);
-        if(pg&&r.slot_number>=1&&r.slot_number<=9)pg.cards[r.slot_number-1]={id:r.card_id,name:r.card_name,image:r.image_url,setName:'',localId:''};
+        if(pg&&r.slot_number>=1&&r.slot_number<=9)pg.cards[r.slot_number-1]={id:r.card_id,name:r.card_name,image:r.image_url,setName:r.set_name||'',localId:r.local_id||''};
       }
       importedBinders++;importedCards+=cardRows.length;if(src.cover_image)importedCovers++;
     }
