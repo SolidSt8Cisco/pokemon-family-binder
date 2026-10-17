@@ -4,6 +4,8 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#18212f"><title>Pokémon Family Binder</title>
 <style>
+.tile-wrap{position:relative;aspect-ratio:2.5/3.5;min-width:0}
+.tile-wrap .binder-tile{width:100%;height:100%}
 .slot img.card-img{-webkit-tap-highlight-color:transparent}
 .icon-row{gap:8px;align-items:center}
 .icon-row-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;line-height:1;padding:8px 12px}
@@ -221,7 +223,7 @@ function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const
   // delete button (sibling overlay, not nested in the tile button)
   const del=document.createElement('button');del.type='button';del.className='tile-delete';del.textContent='×';del.title='Delete binder';del.setAttribute('aria-label','Delete '+binder.name);
   del.onclick=(ev)=>{ev.stopPropagation();openDeleteModal(binder.id)};
-  const wrap=document.createElement('div');wrap.style.cssText='position:relative;min-width:0';
+  const wrap=document.createElement('div');wrap.className='tile-wrap';
   wrap.append(btn,del);
   grid.append(wrap);
 }const add=document.createElement('button');add.type='button';add.className='binder-tile add-tile';add.innerHTML='<span class="plus" aria-hidden="true">+</span><span class="add-label">Add binder</span>';add.onclick=()=>openNameModal('create','New Pokémon Binder');grid.append(add)}
