@@ -1193,7 +1193,8 @@ try{
     return null;
   };
   const allCards=b=>b.pages.flatMap(p=>p.cards.filter(c=>c&&c.id));
-  const binderTotals=b=>{let sum=0,missing=0;for(const c of allCards(b)){const h=cache[String(c.id)];if(h&&h.p!=null)sum+=h.p;else missing++}return {sum,missing,count:allCards(b).length}};
+    window.pkbManual=window.pkbManual||{};
+  const binderTotals=b=>{let sum=0,missing=0;for(const c of allCards(b)){const id=String(c.id),h=cache[id],m=window.pkbManual[id];if(m!=null)sum+=m;else if(h&&h.p!=null)sum+=h.p;else missing++}return {sum,missing,count:allCards(b).length}};
 
   // Panel above the binder tiles
   const panel=document.createElement('div');panel.className='panel';
@@ -1230,6 +1231,7 @@ try{
     $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
   };
   const refreshUI=()=>{decorate();updatePanel()};
+      window.pkbMarket={refreshUI,getPrice:id=>{const h=cache[id];return h?h.p:undefined}};
     // Backup source for cards TCGdex has no price for (pokemontcg.io, also TCGplayer market prices)
   const info={};
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1320,4 +1322,139 @@ try{
     }).catch(()=>{if(el.dataset.id===id)el.textContent=''});
   };
 }catch(err){console.error('Market value patch failed:',err)}
+</script><script>
+/* PATCH: manual "my own value" for a card. Needs the market-value patch above it. To undo: delete this whole <script> block. */
+try{
+  const manual=window.pkbManual=window.pkbManual||{};
+  const fmtM=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+  const redraw=()=>{if(window.pkbMarket&&window.pkbMarket.refreshUI)window.pkbMarket.refreshUI()};
+  const msg=t=>{$('manualMsg').textContent=t};
+
+  const loadManual=async()=>{
+    if(!signedInUser)return;
+    const {data,error}=await supabaseClient.from('family_card_values').select('card_id,manual_value').eq('family_id',signedInUser.id);
+    if(error){console.warn('Manual values not loaded:',error.message);return}
+    for(const k of Object.keys(manual))delete manual[k];
+    for(const r of data||[])manual[String(r.card_id)]=Number(r.manual_value);
+    redraw();
+  };
+  const prevSL=showLibrary;
+  showLibrary=function(){prevSL.apply(this,arguments);loadManual()};
+
+  // Box in the card pop-up
+  const anchor=$('marketLine')||$('cardModalMeta');
+  anchor.insertAdjacentHTML('afterend',
+    '<div class="row" style="justify-content:center;gap:8px;margin-top:10px"><label for="manualInput" class="note">My own value ($)</label><input id="manualInput" class="field" type="number" step="0.01" min="0" placeholder="0.00" style="width:110px"><button id="manualSaveBtn" type="button">Save</button></div><p class="note" style="margin:4px 0 0">Use this when there is no market price. It replaces the market price in your totals. Leave blank to go back to the market price.</p><p id="manualMsg" class="status" aria-live="polite" style="text-align:center"></p>');
+
+  let editingId=null;
+  const prevOpen=openCardModal;
+  openCardModal=function(card){
+    prevOpen.apply(this,arguments);
+    editingId=card&&card.id?String(card.id):null;
+    $('manualInput').value=editingId&&manual[editingId]!=null?String(manual[editingId]):'';
+    $('manualInput').disabled=$('manualSaveBtn').disabled=!editingId;
+    msg(editingId&&manual[editingId]!=null?'Using your value in the totals.':'');
+  };
+
+  const save=async()=>{
+    const id=editingId;if(!id||!signedInUser)return;
+    const raw=$('manualInput').value.trim();
+    const val=raw===''?null:Number(raw);
+    if(val!==null&&(isNaN(val)||val<0)){msg('Enter 0 or more, or leave blank to go back to the market price.');return}
+    msg('Saving…');
+    try{
+      if(val===null){
+        const {error}=await supabaseClient.from('family_card_values').delete().eq('family_id',signedInUser.id).eq('card_id',id);
+        if(error)throw error;
+        delete manual[id];
+        msg('Cleared. The market price (if there is one) is used again.');
+      }else{
+        const {error}=await supabaseClient.from('family_card_values').upsert({family_id:signedInUser.id,card_id:id,manual_value:val},{onConflict:'family_id,card_id'});
+        if(error)throw error;
+        manual[id]=val;
+        msg('Saved. Using '+fmtM(val)+' in your totals.');
+      }
+      redraw();
+    }catch(e){console.error(e);msg('Could not save: '+(e.message||'database error'))}
+  };
+  $('manualSaveBtn').onclick=save;
+  $('manualInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save()}});
+}catch(err){console.error('Manual value patch failed:',err)}
+</script><script>
+/* PATCH: flag cards with no value (red badge + list). Needs the market-value patch. To undo: delete this whole <script> block. */
+try{
+  // A card "needs a value" once its price lookup finished with no result and you haven't entered your own
+  const needsValue=id=>{
+    if(window.pkbManual&&window.pkbManual[id]!=null)return false;
+    const mk=window.pkbMarket;
+    return !!(mk&&mk.getPrice&&mk.getPrice(id)===null);
+  };
+  const missingCards=()=>{
+    const map=new Map();
+    for(const b of binders)for(const pg of b.pages)for(const c of pg.cards){
+      if(!c||!c.id)continue;
+      const id=String(c.id);if(!needsValue(id))continue;
+      const e=map.get(id)||{card:c,copies:0,where:b.name+', page '+pg.pageNumber};
+      e.copies++;map.set(id,e);
+    }
+    return [...map.values()].sort((a,b)=>a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
+  };
+
+  // Red badge on each card in the 3x3 view
+  const badges=()=>{
+    const p=currentPage();if(!p)return;
+    document.querySelectorAll('#cardGrid .slot').forEach((slot,i)=>{
+      const old=slot.querySelector('.noPriceBadge');if(old)old.remove();
+      const c=p.cards[i];
+      if(c&&c.id&&needsValue(String(c.id))){
+        const b=document.createElement('span');
+        b.className='noPriceBadge';b.textContent='!';b.title='No market value. Tap the card to enter your own.';
+        b.style.cssText='position:absolute;top:5px;left:5px;width:20px;height:20px;border-radius:50%;background:#e5484d;color:#fff;font:700 13px/20px system-ui,sans-serif;text-align:center;z-index:2;box-shadow:0 1px 3px #000a;pointer-events:none';
+        slot.append(b);
+      }
+    });
+  };
+  const origRC=renderCards;
+  renderCards=function(){origRC.apply(this,arguments);badges()};
+
+  // Button on the home screen + list pop-up
+  $('valSub').insertAdjacentHTML('afterend','<button id="noPriceBtn" type="button" class="hidden" style="margin-top:8px;border-color:#e5484d">🔴 Show cards without a price</button>');
+  document.body.insertAdjacentHTML('beforeend','<div class="modal" id="noPriceModal" role="dialog" aria-modal="true" aria-labelledby="noPriceTitle"><div class="dialog"><div class="dialoghead"><h2 id="noPriceTitle">Cards without a price</h2><button class="close" id="noPriceClose" aria-label="Close">×</button></div><p class="sub" id="noPriceSub"></p><div id="noPriceList" class="list"></div></div></div>');
+  const closeList=()=>$('noPriceModal').classList.remove('open');
+  const updateLink=()=>{
+    const n=missingCards().length;
+    $('noPriceBtn').classList.toggle('hidden',n===0);
+    $('noPriceBtn').textContent='🔴 Show cards without a price ('+n+')';
+  };
+  $('noPriceBtn').onclick=()=>{
+    const items=missingCards(),list=$('noPriceList');list.innerHTML='';
+    $('noPriceSub').textContent=items.length?'Tap a card to enter your own value for it.':'Every card has a value.';
+    for(const e of items){
+      const row=document.createElement('button');row.type='button';row.className='item';
+      const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=String(e.card.image||'').replace('/high.','/low.');
+      img.onerror=()=>{img.style.display='none'};
+      const meta=document.createElement('div');meta.className='meta';
+      const n=document.createElement('strong');n.textContent=e.card.name;
+      const s=document.createElement('small');
+      s.textContent=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+e.where+(e.copies>1?' · '+e.copies+' copies':'');
+      meta.append(n,s);row.append(img,meta);
+      row.onclick=()=>{closeList();openCardModal(e.card)};
+      list.append(row);
+    }
+    $('noPriceModal').classList.add('open');
+  };
+  $('noPriceClose').onclick=closeList;
+  $('noPriceModal').addEventListener('click',e=>{if(e.target===$('noPriceModal'))closeList()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeList()});
+
+  // Keep badges and the button up to date as prices load or you save a value
+  const refreshAll=()=>{badges();updateLink()};
+  if(window.pkbMarket&&window.pkbMarket.refreshUI){
+    const origUI=window.pkbMarket.refreshUI;
+    window.pkbMarket.refreshUI=function(){origUI.apply(this,arguments);refreshAll()};
+  }
+  new MutationObserver(refreshAll).observe($('valStatus'),{childList:true,characterData:true,subtree:true});
+  const origSL=showLibrary;
+  showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
+}catch(err){console.error('No-price flag patch failed:',err)}
 </script></body></html>
