@@ -456,11 +456,11 @@ $('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUs
 supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
 updateAuthUi();
 
-  async function backfillCardMetadata(){
+async function backfillCardMetadata(){
   if(!signedInUser){console.log('Sign in first');return}
   console.log('Fetching all cards without metadata…');
   const {data:rows,error}=await supabaseClient.from('family_binder_cards')
-    .select('id,card_id,set_name,local_id')
+    .select('family_id,binder_id,page_number,slot_number,card_id,set_name,local_id')
     .eq('family_id',signedInUser.id)
     .or('set_name.is.null,local_id.is.null');
   if(error){console.error(error);return}
@@ -476,8 +476,10 @@ updateAuthUi();
       if(!setName&&!localId){skipped++;continue}
       const {error:upErr}=await supabaseClient.from('family_binder_cards')
         .update({set_name:setName,local_id:localId})
-        .eq('id',row.id)
-        .eq('family_id',signedInUser.id);
+        .eq('family_id',signedInUser.id)
+        .eq('binder_id',row.binder_id)
+        .eq('page_number',row.page_number)
+        .eq('slot_number',row.slot_number);
       if(upErr){failed++;console.error('Update failed for',row.card_id,upErr);continue}
       updated++;
       if(updated%10===0)console.log(`Backfilled ${updated}/${rows.length}`);
