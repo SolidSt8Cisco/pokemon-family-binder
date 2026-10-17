@@ -20,7 +20,9 @@
 .result-badge{position:absolute;top:4px;left:4px;background:var(--accent);color:#101722;font-size:.66rem;font-weight:700;padding:2px 6px;border-radius:999px;line-height:1.2;pointer-events:none}
 .result-badge.wanted{left:auto;right:4px;background:#6ea8ff}
 :root{color-scheme:dark;--bg:#101722;--panel:#1a2534;--line:#35465c;--text:#f3f6fb;--muted:#b6c2d2;--accent:#ffd34e;--danger:#a74355}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}h1{font-size:1.2rem;margin:0}h2{font-size:1.15rem;margin:0}button,input{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:10px;background:#26364a;color:var(--text);padding:10px 13px}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.wrap{max-width:1050px;margin:auto;padding:18px 14px 42px}.sub{color:var(--muted);font-size:.92rem;margin:4px 0 18px}.note{color:var(--muted);font-size:.82rem}.panel{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:15px;margin-bottom:16px}.field{width:100%;min-width:0;background:#101722;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}.grow{flex:1}.hidden{display:none!important}.status{color:var(--muted);min-height:1.5em;font-size:.9rem}.library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.binder-tile{padding:0;aspect-ratio:2.5/3.5;min-width:0;position:relative;overflow:hidden;border-radius:13px;border:1px solid var(--line);background:#1d2a3b;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;text-align:left}.binder-tile img{width:100%;height:100%;position:absolute;inset:0;object-fit:fill}.binder-tile .cover-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.1rem;color:var(--accent);background:linear-gradient(145deg,#293b52,#141d2a)}.binder-tile .tile-footer{position:absolute;left:0;right:0;bottom:0;background:#080d16db;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;z-index:1}.binder-tile .tile-count{font-size:.72rem;color:var(--muted);line-height:1.2}.binder-tile .tile-name{font-weight:650;font-size:.9rem;color:var(--text);line-height:1.2;text-align:center;overflow-wrap:anywhere}.binder-tile.add-tile{align-items:center;justify-content:center;border-style:dashed;background:transparent;text-align:center}.plus{font-size:3.5rem;color:var(--accent);line-height:1}.add-label{font-size:.9rem;color:var(--muted)}.pagebar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0}.pagebar .group{display:flex;gap:8px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.slot{position:relative;aspect-ratio:2.5/3.5;min-width:0;border:1px solid var(--line);border-radius:12px;background:linear-gradient(145deg,#202d3e,#151e2b);overflow:hidden;display:flex;align-items:center;justify-content:center}.slot.empty{border-style:dashed}.slot img.card-img{width:100%;height:100%;object-fit:contain;background:#111a26}.cardtools{position:absolute;top:5px;right:5px;display:flex;gap:4px}.cardtools button{padding:5px 8px;background:#111c2ddd;border-color:#718198}
-.slotlabel{position:absolute;bottom:0;left:0;right:0;padding:4px 5px;background:transparent;color:var(--text);font-size:.72rem;text-align:center;overflow-wrap:anywhere;text-shadow:0 1px 3px #000,0 0 6px #000;pointer-events:none;opacity:.85}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.modal{position:fixed;inset:0;background:#05080dcc;z-index:10;display:none;align-items:center;justify-content:center;padding:12px}.modal.open{display:flex}.dialog{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(760px,100%);max-height:92dvh;overflow:auto;padding:16px}.dialoghead{display:flex;justify-content:space-between;align-items:center;gap:10px}.searchrow{display:flex;gap:8px;margin:14px 0}.searchrow input{min-width:0;flex:1}.results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.result{border:1px solid var(--line);background:#111b28;border-radius:10px;padding:7px;text-align:left;min-width:0}.result img{display:block;width:100%;aspect-ratio:2.5/3.5;object-fit:contain}.result strong{display:block;font-size:.85rem;margin-top:6px}.result small{display:block;color:var(--muted);font-size:.75rem}.close{font-size:1.25rem;padding:5px 11px}.cover-preview{width:88px;aspect-ratio:2.5/3.5;height:auto;object-fit:fill;border:1px solid var(--line);border-radius:10px;background:#101722}
+.slotlabel{position:absolute;bottom:0;left:0;right:0;padding:4px 5px;background:transparent;color:var(--text);font-size:.72rem;text-align:center;overflow-wrap:anywhere;text-shadow:0 1px 3px #000,0 0 6px #000;pointer-events:none;opacity:.85}
+.purchase-chip{position:absolute;bottom:4px;right:4px;background:#4caf6a;color:#08110b;font-size:.66rem;font-weight:700;padding:2px 6px;border-radius:999px;line-height:1.2;pointer-events:none;z-index:1}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.modal{position:fixed;inset:0;background:#05080dcc;z-index:10;display:none;align-items:center;justify-content:center;padding:12px}.modal.open{display:flex}.dialog{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(760px,100%);max-height:92dvh;overflow:auto;padding:16px}.dialoghead{display:flex;justify-content:space-between;align-items:center;gap:10px}.searchrow{display:flex;gap:8px;margin:14px 0}.searchrow input{min-width:0;flex:1}.results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.result{border:1px solid var(--line);background:#111b28;border-radius:10px;padding:7px;text-align:left;min-width:0}.result img{display:block;width:100%;aspect-ratio:2.5/3.5;object-fit:contain}.result strong{display:block;font-size:.85rem;margin-top:6px}.result small{display:block;color:var(--muted);font-size:.75rem}.close{font-size:1.25rem;padding:5px 11px}.cover-preview{width:88px;aspect-ratio:2.5/3.5;height:auto;object-fit:fill;border:1px solid var(--line);border-radius:10px;background:#101722}
 .primary{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700;width:100%;padding:14px}.danger{background:#472b34;border-color:#79424f}.danger:hover{background:#5a3441}.list{display:grid;gap:8px;margin-top:10px}.item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:#111b28;border-radius:10px;padding:6px;color:var(--text);text-align:left;cursor:pointer;font:inherit}.item:hover{background:#16222f}.item:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.item img{width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none}.item .meta{min-width:0}.item strong{display:block;overflow-wrap:anywhere}.item small{color:var(--muted)}.badge{margin-left:auto;background:var(--accent);color:#101722;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem;flex:none}
 .owner-chip{display:inline-block;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:#111b28;color:var(--text);cursor:pointer;font:inherit;font-size:.9rem}
 .owner-chip.active{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700}
@@ -46,11 +48,17 @@
 .cart-row .price-box .delta.over{color:#ff8a8a}
 .cart-row .price-box .delta.under{color:#7ddf9b}
 .cart-row .price-box .delta.even{color:var(--muted)}
-.cart-row .del{padding:4px 8px;background:#111c2ddd;border-color:#718198;font-size:.9rem;margin-left:auto}
+.cart-row .actions-mini{display:flex;gap:6px;align-items:center;margin-left:auto}
+.cart-row .buy-btn{padding:5px 10px;background:#4caf6a;color:#08110b;border-color:#4caf6a;font-weight:700;font-size:.8rem}
+.cart-row .del{padding:4px 8px;background:#111c2ddd;border-color:#718198;font-size:.9rem}
 .cart-empty{color:var(--muted);padding:10px 4px;font-size:.88rem}
 .cart-totals{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:.9rem}
 .cart-totals .total-block{background:#111b28;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
 .cart-totals .total-block strong{display:block;color:var(--accent);font-size:1rem}
+.binder-pick-item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:#111b28;border-radius:10px;padding:10px;margin-top:8px;cursor:pointer;width:100%;text-align:left;color:var(--text);font:inherit}
+.binder-pick-item:hover{background:#16222f}
+.binder-pick-item strong{display:block;overflow-wrap:anywhere}
+.binder-pick-item small{color:var(--muted)}
 @media(min-width:620px){.library-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.grid{gap:14px}.wrap{padding-top:24px}.slot{max-height:420px}.results{grid-template-columns:repeat(4,minmax(0,1fr))}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:900px){.library-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:380px){.grid{gap:6px}.wrap{padding-left:8px;padding-right:8px}.slotlabel{font-size:.63rem}.tile-name{font-size:.85rem}}
 </style></head>
 <body>
@@ -62,7 +70,7 @@
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
 <section id="cartView" class="hidden">
-<div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="cartBackBtn" type="button" class="icon-row-btn">← Back</button><button id="cartClearBtn" type="button" class="danger" style="margin-left:auto">Clear cart</button></div>
+<div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="cartBackBtn" type="button" class="icon-row-btn">← Back</button><button id="cartClearBtn" type="button" class="danger" style="margin-left:auto">Clear trip</button></div>
 <h2>Shopping cart</h2>
 <p class="sub" id="cartSummary">0 items</p>
 <div class="cart-totals" id="cartTotals"></div>
@@ -84,6 +92,7 @@
 <div class="modal" id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"><div class="dialog" style="width:min(520px,100%);text-align:center"><div class="dialoghead"><h2 id="cardModalTitle">Card</h2><button class="close" id="closeCardBtn" aria-label="Close">×</button></div><img id="cardModalImg" alt="" style="width:100%;max-height:70dvh;object-fit:contain;border-radius:10px;background:#111a26;margin-top:12px"><p id="cardModalMeta" class="note" style="margin-top:10px"></p></div></div>
 <div class="modal" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="nameModalTitle">Binder name</h2><button class="close" id="closeNameBtn" aria-label="Close">×</button></div><form id="nameForm" style="margin-top:12px"><input id="nameInput" class="field" type="text" maxlength="80" autocomplete="off" required><p id="nameError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="nameCancelBtn">Cancel</button><button type="submit" id="nameSaveBtn" class="primary" style="width:auto;padding:10px 18px">Save</button></div></form></div></div>
 <div class="modal" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="deleteModalTitle">Delete binder</h2><button class="close" id="closeDeleteBtn" aria-label="Close">×</button></div><p id="deleteModalText" class="sub" style="margin-top:12px"></p><p id="deleteError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="deleteCancelBtn">Cancel</button><button type="button" id="deleteConfirmBtn" class="danger">Delete binder</button></div></div></div>
+<div class="modal" id="binderPickModal" role="dialog" aria-modal="true" aria-labelledby="binderPickTitle"><div class="dialog" style="width:min(480px,100%)"><div class="dialoghead"><h2 id="binderPickTitle">Add to which binder?</h2><button class="close" id="closeBinderPickBtn" aria-label="Close">×</button></div><p id="binderPickCard" class="sub" style="margin-top:12px"></p><div id="binderPickList"></div><div class="row" style="justify-content:flex-end;margin-top:12px"><button type="button" id="binderPickCancelBtn">Cancel</button></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL='https://whbuikfheckjebgeglpu.supabase.co';
@@ -94,6 +103,7 @@ let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, lastF
 let lastDeleted=null;
 let nameModalMode=null;
 let pendingDeleteId=null;
+let pendingBuyCartItem=null;
 const CART_OWNERS=['Dad','Kid 1','Kid 2'];
 let cartOwner='Dad';
 let cartItems=[];
@@ -150,7 +160,9 @@ function openCardModal(card){
   big.style.display='';
   big.src=card.image;
   big.alt=card.name;
-  $('cardModalMeta').textContent=[card.id,card.setName,card.localId?'#'+card.localId:''].filter(Boolean).join(' · ');
+  let metaParts=[card.id,card.setName,card.localId?'#'+card.localId:''].filter(Boolean);
+  if(card.purchasePrice!=null){metaParts.push('Bought $'+Number(card.purchasePrice).toFixed(2))}
+  $('cardModalMeta').textContent=metaParts.join(' · ');
   $('cardModal').classList.add('open');
   $('closeCardBtn').focus();
 }
@@ -260,6 +272,67 @@ async function deleteBinder(binderId){
   renderLibrary();renderCollection();
 }
 
+/* ---------- Binder picker modal ---------- */
+function openBinderPickModal(cartItemId){
+  const it=cartItems.find(x=>x.id===cartItemId);
+  if(!it)return;
+  pendingBuyCartItem=cartItemId;
+  $('binderPickCard').textContent='Buying '+it.card_name+(it.shelf_price!=null?' for $'+Number(it.shelf_price).toFixed(2):'')+(it.owner?' (for '+it.owner+')':'');
+  const list=$('binderPickList');list.innerHTML='';
+  if(!binders.length){
+    const p=document.createElement('p');p.className='cart-empty';p.textContent='Create a binder first from the library page.';list.append(p);
+  } else {
+    for(const b of binders){
+      const count=b.pages.reduce((n,p)=>n+p.cards.filter(Boolean).length,0);
+      const btn=document.createElement('button');btn.type='button';btn.className='binder-pick-item';
+      const meta=document.createElement('div');
+      const nm=document.createElement('strong');nm.textContent=b.name;
+      const sub=document.createElement('small');sub.textContent=count+' card'+(count===1?'':'s');
+      meta.append(nm,sub);
+      btn.append(meta);
+      btn.onclick=()=>doBuyIntoBinder(b.id);
+      list.append(btn);
+    }
+  }
+  $('binderPickModal').classList.add('open');
+  lastFocus=document.activeElement;
+}
+function closeBinderPickModal(){
+  $('binderPickModal').classList.remove('open');
+  pendingBuyCartItem=null;
+  if(lastFocus&&lastFocus.focus)lastFocus.focus();
+}
+$('closeBinderPickBtn').onclick=closeBinderPickModal;
+$('binderPickCancelBtn').onclick=closeBinderPickModal;
+$('binderPickModal').addEventListener('click',e=>{if(e.target===$('binderPickModal'))closeBinderPickModal()});
+
+async function doBuyIntoBinder(binderId){
+  if(!pendingBuyCartItem||!signedInUser)return;
+  const it=cartItems.find(x=>x.id===pendingBuyCartItem);
+  const b=binders.find(x=>x.id===binderId);
+  if(!it||!b){closeBinderPickModal();return}
+  const btn=$('binderPickCancelBtn');btn.disabled=true;
+  try{
+    const card={id:it.card_id,name:it.card_name,image:it.image_url,setName:it.set_name||'',localId:it.local_id||'',purchasePrice:it.shelf_price!=null?Number(it.shelf_price):null};
+    const wasActive=activeBinderId;
+    activeBinderId=b.id;
+    addToNextBlank(card);
+    saveBinderSoon();
+    activeBinderId=wasActive;
+    const {error}=await supabaseClient.from('family_shopping_cart').delete().eq('id',it.id).eq('family_id',signedInUser.id);
+    if(error)throw new Error('Card added to binder, but cart cleanup failed: '+error.message);
+    cartItems=cartItems.filter(x=>x.id!==it.id);
+    closeBinderPickModal();
+    renderCart();
+    setStatus('cartStatus','Bought '+it.card_name+' → added to '+b.name+'.');
+  }catch(err){
+    console.error(err);
+    setStatus('cartStatus','Could not finish buy: '+(err.message||'unknown error'));
+  }finally{
+    btn.disabled=false;
+  }
+}
+
 function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const binder of binders){
   const count=binder.pages.reduce((n,p)=>n+p.cards.filter(Boolean).length,0);
   const btn=document.createElement('button');btn.type='button';btn.className='binder-tile';btn.setAttribute('aria-label','Open '+binder.name);
@@ -278,8 +351,8 @@ function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const
   grid.append(wrap);
 }const add=document.createElement('button');add.type='button';add.className='binder-tile add-tile';add.innerHTML='<span class="plus" aria-hidden="true">+</span><span class="add-label">Add binder</span>';add.onclick=()=>openNameModal('create','New Pokémon Binder');grid.append(add)}
 function renderBinder(){const b=currentBinder();if(!b){showLibrary();return}while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();if(!b.pages.length)b.pages=[{pageNumber:1,cards:blankCards()}];activePageIndex=Math.min(Math.max(0,activePageIndex),b.pages.length-1);$('activeBinderName').textContent=b.name;$('activeCover').classList.toggle('hidden',!b.cover_image);if(b.cover_image)$('activeCover').src=b.cover_image;renderCards();$('pageLabel').textContent=`Page ${activePageIndex+1} of ${b.pages.length}`;$('prevPageBtn').disabled=activePageIndex===0;$('nextPageBtn').disabled=activePageIndex>=b.pages.length-1;}
-function renderCards(){const grid=$('cardGrid');grid.innerHTML='';const p=currentPage();if(!p)return;p.cards.forEach((card,i)=>{const slot=document.createElement('div');slot.className='slot'+(card?'':' empty');slot.setAttribute('aria-label',card?`${card.name}, slot ${i+1}`:`Empty slot ${i+1}`);if(card){const imgBtn=document.createElement('button');imgBtn.type='button';imgBtn.style.cssText='display:block;width:100%;height:100%;padding:0;border:none;background:transparent;cursor:zoom-in';const img=document.createElement('img');img.className='card-img';img.src=card.image;img.alt=card.name;img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='contain';img.onerror=()=>{img.alt='Card image unavailable';img.style.display='none'};imgBtn.append(img);imgBtn.onclick=()=>openCardModal(card);slot.append(imgBtn);const tools=document.createElement('div');tools.className='cardtools';const remove=document.createElement('button');remove.textContent='×';remove.title='Remove card';remove.setAttribute('aria-label','Remove '+card.name);remove.onclick=()=>deleteCardWithUndo(i);tools.append(remove);slot.append(tools);const label=document.createElement('div');label.className='slotlabel';label.textContent=card.name;slot.append(label)}grid.append(slot)})}
-async function loadLibrary(){if(!signedInUser)return;setStatus('authStatus','Loading your family binders from the cloud…');try{const [{data:rows,error:e1},{data:pageRows,error:e2},{data:cardRows,error:e3}]=await Promise.all([supabaseClient.from('family_binders').select('id,family_id,name,cover_image,is_default,sort_order,created_at').eq('family_id',signedInUser.id).order('sort_order').order('created_at'),supabaseClient.from('family_binder_pages').select('binder_id,page_number').eq('family_id',signedInUser.id).order('page_number'),supabaseClient.from('family_binder_cards').select('binder_id,page_number,slot_number,card_id,card_name,image_url,set_name,local_id').eq('family_id',signedInUser.id).order('page_number').order('slot_number')]);if(e1)throw e1;if(e2)throw e2;if(e3)throw e3;binders=(rows||[]).map(r=>({...r,pages:[]}));for(const b of binders){const pageNums=new Set([1]);for(const p of pageRows||[])if(p.binder_id===b.id)pageNums.add(normalizePageNumber(p.page_number));for(const c of cardRows||[])if(c.binder_id===b.id)pageNums.add(normalizePageNumber(c.page_number));b.pages=Array.from(pageNums).sort((a,b)=>a-b).map(pageNumber=>({pageNumber,cards:blankCards()}));for(const c of cardRows||[]){if(c.binder_id!==b.id)continue;const p=b.pages.find(x=>x.pageNumber===c.page_number);if(p&&c.slot_number>=1&&c.slot_number<=9)p.cards[c.slot_number-1]={id:c.card_id,name:c.card_name,image:c.image_url,setName:c.set_name||'',localId:c.local_id||''}}}await loadCart();updateAuthUi();showLibrary();setStatus('authStatus','Signed in. Your family binders are ready.')}catch(e){console.error(e);setStatus('authStatus','Could not load binders: '+(e.message||'check that the new database setup has completed.'));}}
+function renderCards(){const grid=$('cardGrid');grid.innerHTML='';const p=currentPage();if(!p)return;p.cards.forEach((card,i)=>{const slot=document.createElement('div');slot.className='slot'+(card?'':' empty');slot.setAttribute('aria-label',card?`${card.name}, slot ${i+1}`:`Empty slot ${i+1}`);if(card){const imgBtn=document.createElement('button');imgBtn.type='button';imgBtn.style.cssText='display:block;width:100%;height:100%;padding:0;border:none;background:transparent;cursor:zoom-in';const img=document.createElement('img');img.className='card-img';img.src=card.image;img.alt=card.name;img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='contain';img.onerror=()=>{img.alt='Card image unavailable';img.style.display='none'};imgBtn.append(img);imgBtn.onclick=()=>openCardModal(card);slot.append(imgBtn);if(card.purchasePrice!=null){const chip=document.createElement('span');chip.className='purchase-chip';chip.textContent='$'+Number(card.purchasePrice).toFixed(2);slot.append(chip)}const tools=document.createElement('div');tools.className='cardtools';const remove=document.createElement('button');remove.textContent='×';remove.title='Remove card';remove.setAttribute('aria-label','Remove '+card.name);remove.onclick=()=>deleteCardWithUndo(i);tools.append(remove);slot.append(tools);const label=document.createElement('div');label.className='slotlabel';label.textContent=card.name;slot.append(label)}grid.append(slot)})}
+async function loadLibrary(){if(!signedInUser)return;setStatus('authStatus','Loading your family binders from the cloud…');try{const [{data:rows,error:e1},{data:pageRows,error:e2},{data:cardRows,error:e3}]=await Promise.all([supabaseClient.from('family_binders').select('id,family_id,name,cover_image,is_default,sort_order,created_at').eq('family_id',signedInUser.id).order('sort_order').order('created_at'),supabaseClient.from('family_binder_pages').select('binder_id,page_number').eq('family_id',signedInUser.id).order('page_number'),supabaseClient.from('family_binder_cards').select('binder_id,page_number,slot_number,card_id,card_name,image_url,set_name,local_id,purchase_price').eq('family_id',signedInUser.id).order('page_number').order('slot_number')]);if(e1)throw e1;if(e2)throw e2;if(e3)throw e3;binders=(rows||[]).map(r=>({...r,pages:[]}));for(const b of binders){const pageNums=new Set([1]);for(const p of pageRows||[])if(p.binder_id===b.id)pageNums.add(normalizePageNumber(p.page_number));for(const c of cardRows||[])if(c.binder_id===b.id)pageNums.add(normalizePageNumber(c.page_number));b.pages=Array.from(pageNums).sort((a,b)=>a-b).map(pageNumber=>({pageNumber,cards:blankCards()}));for(const c of cardRows||[]){if(c.binder_id!==b.id)continue;const p=b.pages.find(x=>x.pageNumber===c.page_number);if(p&&c.slot_number>=1&&c.slot_number<=9)p.cards[c.slot_number-1]={id:c.card_id,name:c.card_name,image:c.image_url,setName:c.set_name||'',localId:c.local_id||'',purchasePrice:c.purchase_price!=null?Number(c.purchase_price):null}}}await loadCart();updateAuthUi();showLibrary();setStatus('authStatus','Signed in. Your family binders are ready.')}catch(e){console.error(e);setStatus('authStatus','Could not load binders: '+(e.message||'check that the new database setup has completed.'));}}
 async function createBinder(clean){
   if(!signedInUser)throw new Error('You are not signed in.');
   setStatus('libraryStatus','Creating binder…');
@@ -315,7 +388,7 @@ function setSaveDot(state){
   else {dot.title='Saved'}
 }
 function saveBinderSoon(message){const b=currentBinder();if(!b)return;if(message)setStatus('binderStatus',message);pendingSave=true;setSaveDot('saving');clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
-async function pushBinder(binderId){if(!signedInUser)return;const b=binders.find(x=>x.id===binderId);if(!b)return;if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}cloudBusy=true;setSaveDot('saving');try{const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));if(pageRows.length){const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});if(error)throw error}const desired=[];for(const p of b.pages)p.cards.forEach((card,i)=>{if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image,set_name:card.setName||null,local_id:card.localId||null})});if(desired.length){const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});if(error)throw error}const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(readError)throw readError;const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);if(error)throw error}const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(pageReadError)throw pageReadError;const wantedPages=new Set(b.pages.map(p=>p.pageNumber));for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);if(error)throw error}}catch(e){console.error(e);setSaveDot('error');setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'))}finally{cloudBusy=false;pendingSave=false;if(!$('saveDot').classList.contains('error'))setSaveDot('saved')}}
+async function pushBinder(binderId){if(!signedInUser)return;const b=binders.find(x=>x.id===binderId);if(!b)return;if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}cloudBusy=true;setSaveDot('saving');try{const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));if(pageRows.length){const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});if(error)throw error}const desired=[];for(const p of b.pages)p.cards.forEach((card,i)=>{if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image,set_name:card.setName||null,local_id:card.localId||null,purchase_price:card.purchasePrice!=null?Number(card.purchasePrice):null})});if(desired.length){const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});if(error)throw error}const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(readError)throw readError;const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);if(error)throw error}const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(pageReadError)throw pageReadError;const wantedPages=new Set(b.pages.map(p=>p.pageNumber));for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);if(error)throw error}}catch(e){console.error(e);setSaveDot('error');setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'))}finally{cloudBusy=false;pendingSave=false;if(!$('saveDot').classList.contains('error'))setSaveDot('saved')}}
 
 /* ---------- Unsaved-changes guard ---------- */
 async function flushPendingSave(){
@@ -458,7 +531,6 @@ function renderCart(){
   renderOwnerChips();
   const total=cartItems.length;
   $('cartSummary').textContent=total===0?'Cart is empty.':`${total} item${total===1?'':'s'} in the cart.`;
-  /* Totals */
   const totalsWrap=$('cartTotals');totalsWrap.innerHTML='';
   if(total>0){
     const shelfTotal=cartItems.reduce((s,x)=>s+(x.shelf_price!=null?Number(x.shelf_price):0),0);
@@ -488,7 +560,6 @@ function renderCart(){
     const title=document.createElement('strong');title.textContent=owner;
     const sub=document.createElement('div');sub.className='owner-sub';sub.textContent=`${items.length} item${items.length===1?'':'s'}`;
     left.append(title,sub);
-    /* Owner summary flag */
     const haveBoth=items.filter(x=>x.shelf_price!=null&&x.online_price!=null);
     let flagText='',flagCls='';
     if(haveBoth.length){
@@ -508,7 +579,6 @@ function renderCart(){
       const nm=document.createElement('strong');nm.textContent=it.card_name;
       const sub2=document.createElement('small');sub2.textContent=[it.set_name,it.local_id?'#'+it.local_id:''].filter(Boolean).join(' · ')||it.card_id;
       meta.append(nm,sub2);
-      /* Price box */
       const priceBox=document.createElement('div');priceBox.className='price-box';
       const lbl=document.createElement('label');lbl.textContent='Shelf $';
       const inp=document.createElement('input');inp.type='number';inp.step='0.01';inp.min='0';inp.placeholder='0.00';inp.value=it.shelf_price!=null?String(it.shelf_price):'';
@@ -532,6 +602,9 @@ function renderCart(){
         delta.textContent=Math.abs(d)<0.005?'Even':(d>0?'+':'')+fmtUSD(d);
         priceBox.append(delta);
       }
+      const actions=document.createElement('div');actions.className='actions-mini';
+      const buy=document.createElement('button');buy.type='button';buy.className='buy-btn';buy.textContent='Bought';buy.title='Mark as bought and add to a binder';
+      buy.onclick=()=>openBinderPickModal(it.id);
       const del=document.createElement('button');del.type='button';del.className='del';del.textContent='×';del.title='Remove from cart';del.setAttribute('aria-label','Remove '+it.card_name+' from '+owner+"'s cart");
       del.onclick=async()=>{
         del.disabled=true;
@@ -541,7 +614,8 @@ function renderCart(){
         renderCart();
         setStatus('cartStatus','Removed '+it.card_name+' from '+owner+'.');
       };
-      row.append(img,meta,priceBox,del);
+      actions.append(buy,del);
+      row.append(img,meta,priceBox,actions);
       body.append(row);
     }
     group.append(head,body);
@@ -625,11 +699,11 @@ $('cartSearchForm').addEventListener('submit',async e=>{
           $(resultsId).innerHTML='';
           $('cartQuery').value='';
           $('cartQuery').focus();
-}catch(err){
-  console.error('Cart add failed:',err);
-  b.disabled=false;
-  setStatus(statusId,'Could not add this card: '+(err.message||'unknown error'));
-}
+        }catch(err){
+          console.error('Cart add failed:',err);
+          b.disabled=false;
+          setStatus(statusId,'Could not add this card: '+(err.message||'unknown error'));
+        }
       };
       $(resultsId).append(b);
     }
@@ -764,7 +838,7 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
           let full=c;
           const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
           if(r.ok)full=await r.json();
-          const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high'),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||''};
+          const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high'),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||'',purchasePrice:null};
           const spot=addToNextBlank(card);
           renderBinder();
           saveBinderSoon();
@@ -786,7 +860,8 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
 });
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
-  if($('deleteModal').classList.contains('open'))closeDeleteModal();
+  if($('binderPickModal').classList.contains('open'))closeBinderPickModal();
+  else if($('deleteModal').classList.contains('open'))closeDeleteModal();
   else if($('nameModal').classList.contains('open'))closeNameModal();
   else if($('cardModal').classList.contains('open'))closeCardModal();
 });
@@ -824,7 +899,7 @@ $('importFile').onchange=async e=>{
         const cards=Array.isArray(pages[pi].cards)?pages[pi].cards:[];
         for(let si=0;si<9&&si<cards.length;si++){
           const c=cards[si];if(!c||!c.name||!c.image)continue;
-          cardRows.push({family_id:signedInUser.id,binder_id:newBinder.id,page_number:pageNumber,slot_number:si+1,card_id:String(c.id||''),card_name:c.name,image_url:c.image,set_name:c.setName||null,local_id:c.localId||null});
+          cardRows.push({family_id:signedInUser.id,binder_id:newBinder.id,page_number:pageNumber,slot_number:si+1,card_id:String(c.id||''),card_name:c.name,image_url:c.image,set_name:c.setName||null,local_id:c.localId||null,purchase_price:c.purchasePrice!=null?Number(c.purchasePrice):null});
         }
       }
       if(cardRows.length){
@@ -835,7 +910,7 @@ $('importFile').onchange=async e=>{
       const justAdded=binders[binders.length-1];
       for(const r of cardRows){
         const pg=justAdded.pages.find(p=>p.pageNumber===r.page_number);
-        if(pg&&r.slot_number>=1&&r.slot_number<=9)pg.cards[r.slot_number-1]={id:r.card_id,name:r.card_name,image:r.image_url,setName:r.set_name||'',localId:r.local_id||''};
+        if(pg&&r.slot_number>=1&&r.slot_number<=9)pg.cards[r.slot_number-1]={id:r.card_id,name:r.card_name,image:r.image_url,setName:r.set_name||'',localId:r.local_id||'',purchasePrice:r.purchase_price!=null?Number(r.purchase_price):null};
       }
       importedBinders++;importedCards+=cardRows.length;if(src.cover_image)importedCovers++;
     }
