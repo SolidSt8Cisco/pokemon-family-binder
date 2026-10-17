@@ -13,7 +13,7 @@
 @media(min-width:620px){.library-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.grid{gap:14px}.wrap{padding-top:24px}.slot{max-height:420px}.results{grid-template-columns:repeat(4,minmax(0,1fr))}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:900px){.library-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:380px){.grid{gap:6px}.wrap{padding-left:8px;padding-right:8px}.slotlabel{font-size:.63rem}.tile-name{font-size:.85rem}}
 </style></head>
 <body>
-<header><div class="row" style="margin-left:auto"><button id="exportBtn" type="button">Export backup</button><button id="signOutBtn" type="button" class="hidden">Sign out</button></div></header>
+<header><div class="row" style="margin-left:auto"><button id="exportBtn" type="button">Export backup</button><button id="importBtn" type="button">Import backup</button><input id="importFile" type="file" accept=".json,application/json" class="hidden"><button id="signOutBtn" type="button" class="hidden">Sign out</button></div></header>
 <main class="wrap">
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
@@ -33,8 +33,8 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_r5qzENvZgLryyZK_QKSwbQ_C19GIhj_';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const $=id=>document.getElementById(id);
 let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, activeSlot=null, lastFocus=null, cloudBusy=false, saveTimers={};
-let lastDeleted=null; // {binderId, pageIndex, pageNumber, card, snapshot}
-let nameModalMode=null; // 'create' or 'rename'
+let lastDeleted=null;
+let nameModalMode=null;
 const blankCards=()=>Array(9).fill(null);
 function setStatus(id,msg){$(id).textContent=msg}
 function currentBinder(){return binders.find(b=>b.id===activeBinderId)||null}
@@ -284,7 +284,63 @@ document.addEventListener('keydown',e=>{
 });
 $('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('query').value.trim();if(!q)return;setStatus('searchStatus','Searching TCGdex…');$('results').innerHTML='';try{const response=await fetch('https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(q)+'&pagination:itemsPerPage=50');if(!response.ok)throw new Error('Card service returned HTTP '+response.status);const data=await response.json();const matches=(Array.isArray(data)?data:[]).filter(c=>c.image);if(!matches.length){setStatus('searchStatus','No matching cards with images found. Try a shorter or different name.');return}setStatus('searchStatus',`Found ${matches.length} result${matches.length===1?'':'s'}. Tap the card you own.`);for(const c of matches.slice(0,50)){const b=document.createElement('button');b.className='result';const img=document.createElement('img');img.loading='lazy';img.alt=c.name;img.src=cardImageUrl(c.image,'low');img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=cardImageUrl(c.image,'low').replace(/\.webp$/i,'.png')}else img.style.display='none'};const name=document.createElement('strong');name.textContent=c.name;const detail=document.createElement('small');detail.textContent=[c.set?.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id;b.append(img,name,detail);b.onclick=async()=>{b.disabled=true;try{let full=c;const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));if(r.ok)full=await r.json();const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high'),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||''};if(activeSlot===null){const spot=addToNextBlank(card);renderBinder();saveBinderSoon('Card added. Saving…');$('results').innerHTML='';$('query').value='';$('query').focus();setStatus('searchStatus',`Added ${card.name} to page ${spot.page}, pocket ${spot.slot}. Search for another card, or close this window.`)}else{const p=currentPage();if(!p)throw new Error('Open a binder first');p.cards[activeSlot]=card;sortBinderAlphabetically(currentBinder());renderBinder();closeSearch();saveBinderSoon('Card replaced and binder re-sorted. Saving…')}}catch(err){b.disabled=false;setStatus('searchStatus','Could not load this card. Please try again.')}};$('results').append(b)}}catch(err){console.error(err);setStatus('searchStatus','Search failed. Check your internet connection and try again.')}});
 
+/* ---------- Import / Export ---------- */
 $('exportBtn').onclick=()=>{const payload={format:'pokemon-family-binder-backup-v3',exportedAt:new Date().toISOString(),binders:binders.map(b=>({id:b.id,name:b.name,cover_image:b.cover_image,is_default:b.is_default,pages:b.pages.map(p=>({pageNumber:p.pageNumber,cards:p.cards}))}))};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pokemon-family-binders-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+
+$('importBtn').onclick=()=>{if(!signedInUser){setStatus('authStatus','Please sign in first.');return}$('importFile').click()};
+$('importFile').onchange=async e=>{
+  const file=e.target.files?.[0];e.target.value='';
+  if(!file)return;
+  if(!signedInUser){setStatus('libraryStatus','Please sign in first.');return}
+  try{
+    setStatus('libraryStatus','Reading backup file…');
+    const text=await file.text();
+    let payload;
+    try{payload=JSON.parse(text)}catch{throw new Error('That file is not valid JSON.')}
+    if(!payload||payload.format!=='pokemon-family-binder-backup-v3')throw new Error('Unrecognized backup file format.');
+    if(!Array.isArray(payload.binders)||!payload.binders.length)throw new Error('Backup contains no binders.');
+    const totalCards=payload.binders.reduce((n,b)=>n+(Array.isArray(b.pages)?b.pages.reduce((m,p)=>m+(Array.isArray(p.cards)?p.cards.filter(Boolean).length:0),0):0),0);
+    setStatus('libraryStatus','Importing '+payload.binders.length+' binder'+(payload.binders.length===1?'':'s')+' ('+totalCards+' card'+(totalCards===1?'':'s')+')…');
+    let importedBinders=0,importedCards=0,importedCovers=0;
+    for(const src of payload.binders){
+      const baseName=(src.name||'Imported Binder').trim().slice(0,80)||'Imported Binder';
+      const {data:newBinder,error:bErr}=await supabaseClient.from('family_binders').insert({family_id:signedInUser.id,name:baseName,cover_image:src.cover_image||null,is_default:false,sort_order:binders.length}).select('id,family_id,name,cover_image,is_default,sort_order,created_at').single();
+      if(bErr)throw new Error('Could not create binder "'+baseName+'": '+bErr.message);
+      const pages=Array.isArray(src.pages)&&src.pages.length?src.pages:[{pageNumber:1,cards:[]}];
+      const pageNumbers=pages.map((p,i)=>normalizePageNumber(p.pageNumber||i+1));
+      const uniquePages=Array.from(new Set(pageNumbers)).sort((a,b)=>a-b);
+      const pageRows=uniquePages.map(n=>({family_id:signedInUser.id,binder_id:newBinder.id,page_number:n}));
+      const {error:pErr}=await supabaseClient.from('family_binder_pages').insert(pageRows);
+      if(pErr)throw new Error('Could not create pages for "'+baseName+'": '+pErr.message);
+      const cardRows=[];
+      for(let pi=0;pi<pages.length;pi++){
+        const pageNumber=pageNumbers[pi];
+        const cards=Array.isArray(pages[pi].cards)?pages[pi].cards:[];
+        for(let si=0;si<9&&si<cards.length;si++){
+          const c=cards[si];if(!c||!c.name||!c.image)continue;
+          cardRows.push({family_id:signedInUser.id,binder_id:newBinder.id,page_number:pageNumber,slot_number:si+1,card_id:String(c.id||''),card_name:c.name,image_url:c.image});
+        }
+      }
+      if(cardRows.length){
+        const {error:cErr}=await supabaseClient.from('family_binder_cards').insert(cardRows);
+        if(cErr)throw new Error('Could not import cards for "'+baseName+'": '+cErr.message);
+      }
+      binders.push({...newBinder,pages:uniquePages.map(pageNumber=>({pageNumber,cards:blankCards()}))});
+      const justAdded=binders[binders.length-1];
+      for(const r of cardRows){
+        const pg=justAdded.pages.find(p=>p.pageNumber===r.page_number);
+        if(pg&&r.slot_number>=1&&r.slot_number<=9)pg.cards[r.slot_number-1]={id:r.card_id,name:r.card_name,image:r.image_url,setName:'',localId:''};
+      }
+      importedBinders++;importedCards+=cardRows.length;if(src.cover_image)importedCovers++;
+    }
+    renderLibrary();renderCollection();
+    setStatus('libraryStatus','Imported '+importedBinders+' binder'+(importedBinders===1?'':'s')+' and '+importedCards+' card'+(importedCards===1?'':'s')+'.'+(importedCovers?'' :' (No cover images were included in this backup.)'));
+  }catch(err){
+    console.error(err);
+    setStatus('libraryStatus','Import failed: '+(err.message||'unknown error'));
+  }
+};
+
 $('authForm').addEventListener('submit',async e=>{e.preventDefault();$('signInBtn').disabled=true;setStatus('authStatus','Signing in…');try{const {data,error}=await supabaseClient.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;signedInUser=data.user;updateAuthUi();await loadLibrary()}catch(err){setStatus('authStatus','Sign-in failed: '+(err.message||'check email and password'))}finally{$('signInBtn').disabled=false}});
 $('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUser=null;binders=[];activeBinderId=null;updateAuthUi();setStatus('authStatus','Signed out. Sign in again to view the family binders.')};
 supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
