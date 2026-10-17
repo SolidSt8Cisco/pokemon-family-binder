@@ -455,37 +455,4 @@ $('authForm').addEventListener('submit',async e=>{e.preventDefault();$('signInBt
 $('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUser=null;binders=[];activeBinderId=null;updateAuthUi();setStatus('authStatus','Signed out. Sign in again to view the family binders.')};
 supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
 updateAuthUi();
-
-async function backfillCardMetadata(){
-  if(!signedInUser){console.log('Sign in first');return}
-  console.log('Fetching all cards without metadata…');
-  const {data:rows,error}=await supabaseClient.from('family_binder_cards')
-    .select('family_id,binder_id,page_number,slot_number,card_id,set_name,local_id')
-    .eq('family_id',signedInUser.id)
-    .or('set_name.is.null,local_id.is.null');
-  if(error){console.error(error);return}
-  console.log(`Found ${rows.length} cards to backfill`);
-  let updated=0, skipped=0, failed=0;
-  for(const row of rows){
-    try{
-      const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(row.card_id));
-      if(!r.ok){skipped++;console.warn('TCGdex miss:',row.card_id,r.status);continue}
-      const full=await r.json();
-      const setName=full.set?.name||null;
-      const localId=full.localId?String(full.localId):null;
-      if(!setName&&!localId){skipped++;continue}
-      const {error:upErr}=await supabaseClient.from('family_binder_cards')
-        .update({set_name:setName,local_id:localId})
-        .eq('family_id',signedInUser.id)
-        .eq('binder_id',row.binder_id)
-        .eq('page_number',row.page_number)
-        .eq('slot_number',row.slot_number);
-      if(upErr){failed++;console.error('Update failed for',row.card_id,upErr);continue}
-      updated++;
-      if(updated%10===0)console.log(`Backfilled ${updated}/${rows.length}`);
-    }catch(e){failed++;console.error('Fetch failed for',row.card_id,e)}
-  }
-  console.log(`Done. Updated: ${updated}, Skipped: ${skipped}, Failed: ${failed}`);
-}
-  
 </script></body></html>
