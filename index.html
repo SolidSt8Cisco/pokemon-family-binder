@@ -993,7 +993,17 @@ $('importFile').onchange=async e=>{
 
 $('authForm').addEventListener('submit',async e=>{e.preventDefault();$('signInBtn').disabled=true;setStatus('authStatus','Signing in…');try{const {data,error}=await supabaseClient.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;signedInUser=data.user;updateAuthUi();await loadLibrary()}catch(err){setStatus('authStatus','Sign-in failed: '+(err.message||'check email and password'))}finally{$('signInBtn').disabled=false}});
 $('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUser=null;binders=[];activeBinderId=null;cartItems=[];updateAuthUi();setStatus('authStatus','Signed out. Sign in again to view the family binders.')};
-supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
+document.addEventListener('input',e=>{
+  if(e.target.id==='inlineQuery'&&!e.target.value.trim()){
+    $('inlineResults').innerHTML='';
+    setStatus('inlineSearchStatus','');
+  }
+  if(e.target.id==='cartQuery'&&!e.target.value.trim()){
+    $('cartSearchResults').innerHTML='';
+    setStatus('cartSearchStatus','');
+  }
+});
+  supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
 updateAuthUi();
 </script><script>
 /* PATCH: card-number search + your own photos for cards with no TCGdex image.
