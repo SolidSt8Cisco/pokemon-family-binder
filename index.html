@@ -168,7 +168,7 @@ $('deleteConfirmBtn').onclick=async()=>{
   const b=binders.find(x=>x.id===id);
   if(!b){closeDeleteModal();return}
   $('deleteConfirmBtn').disabled=true;
-  $('deleteError').textContent='Deleting…';
+  $('deleteError').textContent='';
   try{
     await deleteBinder(id);
     closeDeleteModal();
@@ -206,7 +206,6 @@ async function deleteBinder(binderId){
   binders=binders.filter(x=>x.id!==binderId);
   if(activeBinderId===binderId)activeBinderId=null;
   renderLibrary();renderCollection();
-  setStatus('libraryStatus','Deleted "'+b.name+'".');
 }
 
 function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const binder of binders){
