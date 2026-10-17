@@ -643,13 +643,10 @@ $('cartSearchForm').addEventListener('submit',async e=>{
   setStatus(statusId,'Searching TCGdex…');
   $(resultsId).innerHTML='';
   try{
-    const response=await fetch('https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(q)+'&pagination:itemsPerPage=50');
-    if(!response.ok)throw new Error('Card service returned HTTP '+response.status);
-    const data=await response.json();
-    const matches=(Array.isArray(data)?data:[]).filter(c=>c.image);
-    if(!matches.length){setStatus(statusId,'No matching cards found.');return}
-    setStatus(statusId,`Found ${matches.length} result${matches.length===1?'':'s'}. Adding to ${cartOwner}'s cart.`);
-    for(const c of matches.slice(0,50)){
+    const {matches,name:sName,num:sNum}=await searchCards(q);
+    if(!matches.length){setStatus(statusId,describeSearch(matches,sName,sNum));return}
+    setStatus(statusId,describeSearch(matches,sName,sNum)+` Adding to ${cartOwner}'s cart.`);
+    for(const c of matches){
       const b=document.createElement('button');b.type='button';b.className='result';
       const img=document.createElement('img');img.loading='lazy';img.alt=c.name;img.src=cardImageUrl(c.image,'low');
       img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=cardImageUrl(c.image,'low').replace(/\.webp$/i,'.png')}else img.style.display='none'};
@@ -804,6 +801,42 @@ function addToNextBlank(card){
   }
   return sortBinderAlphabetically(b);
 }
+/* ---------- Smarter card search: "Pikachu #104", "Pikachu 104/191", "Pikachu 104" ---------- */
+function parseCardQuery(raw){
+  let text=raw.trim(),num=null,m;
+  if((m=text.match(/#?\s*([A-Za-z]*\d+[A-Za-z]*)\s*\/\s*\d+/))){num=m[1];text=text.replace(m[0],' ')}
+  else if((m=text.match(/#\s*([A-Za-z0-9.-]+)/))){num=m[1];text=text.replace(m[0],' ')}
+  else if((m=text.match(/\s(\d{1,3})$/))){num=m[1];text=text.replace(m[0],' ')}
+  return {name:text.replace(/\s+/g,' ').trim(),num};
+}
+const normNum=s=>String(s??'').replace(/^0+(?=\d)/,'').toLowerCase();
+async function pullCards(url){
+  const per=100,maxPages=5;let all=[];
+  for(let page=1;page<=maxPages;page++){
+    const r=await fetch(url+`&pagination:page=${page}&pagination:itemsPerPage=${per}`);
+    if(!r.ok)throw new Error('Card service returned HTTP '+r.status);
+    const data=await r.json();
+    if(!Array.isArray(data))break;
+    all=all.concat(data);
+    if(data.length<per)break;
+  }
+  return all;
+}
+async function searchCards(raw){
+  const {name,num}=parseCardQuery(raw);
+  if(!name)return {matches:[],name,num};
+  const base='https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(name);
+  const keep=all=>{let m=all.filter(c=>c.image);if(num)m=m.filter(c=>normNum(c.localId)===normNum(num));return m};
+  let matches=keep(await pullCards(num?base+'&localId='+encodeURIComponent(normNum(num)):base));
+  if(num&&!matches.length)matches=keep(await pullCards(base)); // safety net if the number filter returns nothing
+  return {matches,name,num};
+}
+function describeSearch(matches,name,num){
+  if(!name)return 'Add a Pokémon name too, like "Pikachu #104".';
+  if(!matches.length)return num?`No cards found for "${name} #${num}". Check the number, or try just the name.`:'No matching cards found.';
+  const n=matches.length;
+  return num?`Found ${n} match${n===1?'':'es'} for ${name} #${num}.`:`Found ${n} result${n===1?'':'s'}. Tip: add the card number (like "${name} #104") to narrow it down.`;
+}
 $('inlineSearchForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const q=$('inlineQuery').value.trim();
@@ -812,13 +845,10 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
   setStatus(statusId,'Searching TCGdex…');
   $(resultsId).innerHTML='';
   try{
-    const response=await fetch('https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(q)+'&pagination:itemsPerPage=50');
-    if(!response.ok)throw new Error('Card service returned HTTP '+response.status);
-    const data=await response.json();
-    const matches=(Array.isArray(data)?data:[]).filter(c=>c.image);
-    if(!matches.length){setStatus(statusId,'No matching cards found.');return}
-    setStatus(statusId,`Found ${matches.length} result${matches.length===1?'':'s'}.`);
-    for(const c of matches.slice(0,50)){
+    const {matches,name:sName,num:sNum}=await searchCards(q);
+    if(!matches.length){setStatus(statusId,describeSearch(matches,sName,sNum));return}
+    setStatus(statusId,describeSearch(matches,sName,sNum));
+    for(const c of matches){
       const b=document.createElement('button');b.type='button';b.className='result';
       const img=document.createElement('img');img.loading='lazy';img.alt=c.name;img.src=cardImageUrl(c.image,'low');
       img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=cardImageUrl(c.image,'low').replace(/\.webp$/i,'.png')}else img.style.display='none'};
