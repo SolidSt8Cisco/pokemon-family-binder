@@ -1230,14 +1230,43 @@ try{
     $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
   };
   const refreshUI=()=>{decorate();updatePanel()};
-
+    // Backup source for cards TCGdex has no price for (pokemontcg.io, also TCGplayer market prices)
+  const info={};
+  const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const ptcgPick=card=>{
+    const pr=card&&card.tcgplayer&&card.tcgplayer.prices;if(!pr)return null;
+    const get=v=>{const p=v&&(v.market!=null?v.market:v.mid);return p!=null&&Number(p)>0?Number(p):null};
+    for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=get(pr[k]);if(p!=null)return p}
+    for(const k of Object.keys(pr)){const p=get(pr[k]);if(p!=null)return p}
+    return null;
+  };
+  let lastFb=0;
+  const fallbackPrice=async c=>{ // number = price, null = not found, undefined = couldn't check (try again later)
+    if(!c||!c.name||!c.localId)return null;
+    const slot=Math.max(Date.now(),lastFb+2200);lastFb=slot; // stay under the free rate limit
+    await new Promise(r=>setTimeout(r,slot-Date.now()));
+    try{
+      const num=String(c.localId).replace(/^0+(?=\d)/,'').replace(/"/g,'');
+      const q='name:"'+String(c.name).replace(/"/g,'')+'" number:"'+num+'"';
+      const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),8000);
+      const r=await fetch('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent(q)+'&select=id,name,number,set,tcgplayer',{signal:ctl.signal});
+      clearTimeout(to);
+      if(!r.ok)return r.status===404?null:undefined;
+      let list=((await r.json()).data)||[];
+      if(list.length>1&&c.setName){const want=normS(c.setName);const m=list.filter(x=>x.set&&normS(x.set.name)===want);if(m.length)list=m}
+      const prices=list.map(ptcgPick).filter(p=>p!=null);
+      if(!prices.length)return null;
+      return prices.every(p=>p===prices[0])?prices[0]:null; // if several different cards match, don't guess
+    }catch(e){return undefined}
+  };
   // Fetch prices (cached for 24 hours, 5 at a time)
   let running=false;
   const refreshPrices=async force=>{
     if(running)return;
     const ids=[...new Set(binders.flatMap(b=>allCards(b).map(c=>String(c.id))))];
+    for(const b of binders)for(const c of allCards(b))info[String(c.id)]=c;
     const now=Date.now();
-    const todo=ids.filter(id=>force||!cache[id]||now-cache[id].t>TTL);
+    const todo=ids.filter(id=>force||!cache[id]||now-cache[id].t>TTL||(cache[id].p==null&&!cache[id].fb));
     refreshUI();
     if(!todo.length){setStatus('valStatus','');return}
     running=true;$('valRefreshBtn').disabled=true;
@@ -1249,6 +1278,10 @@ try{
           const r=await fetch(API+encodeURIComponent(id));
           if(r.ok){cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
           else if(r.status===404){cache[id]={p:null,t:Date.now()}}
+          if(cache[id]&&cache[id].p==null){
+            const fp=await fallbackPrice(info[id]);
+            cache[id]={p:fp==null?null:fp,t:Date.now(),fb:fp===undefined?0:1};
+          }
         }catch(e){}
         done++;
         setStatus('valStatus','Fetching prices… '+done+' of '+total);
