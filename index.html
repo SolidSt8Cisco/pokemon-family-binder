@@ -826,7 +826,7 @@ async function searchCards(raw){
   const {name,num}=parseCardQuery(raw);
   if(!name)return {matches:[],name,num};
   const base='https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(name);
-  const keep=all=>{let m=all.filter(c=>c.image);if(num)m=m.filter(c=>normNum(c.localId)===normNum(num));return m};
+  const keep=all=>{let m=all.const keep=all=>{let m=all;if(num)m=m.filter(c=>normNum(c.localId)===normNum(num));return m};;if(num)m=m.filter(c=>normNum(c.localId)===normNum(num));return m};
   let matches=keep(await pullCards(num?base+'&localId='+encodeURIComponent(normNum(num)):base));
   if(num&&!matches.length)matches=keep(await pullCards(base)); // safety net if the number filter returns nothing
   return {matches,name,num};
