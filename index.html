@@ -372,7 +372,7 @@ $('inlineSearchForm').addEventListener('submit',async e=>{
           const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high'),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||''};
           const spot=addToNextBlank(card);
           renderBinder();
-          saveBinderSoon('Card added. Saving…');
+          saveBinderSoon();
           setStatus(statusId,`Added ${card.name} to page ${spot.page}, pocket ${spot.slot}.`);
           $(resultsId).innerHTML='';
           $('inlineQuery').value='';
