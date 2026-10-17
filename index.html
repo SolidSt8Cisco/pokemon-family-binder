@@ -1176,4 +1176,115 @@ try{
   $('priceInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save()}});
 }catch(err){console.error('Price patch failed:',err)}
 </script><style>.slotlabel{display:none}
-</style></body></html>
+</style><script>
+/* PATCH: market values (TCGplayer, USD via TCGdex). To undo: delete this whole <script> block. */
+try{
+  const API='https://api.tcgdex.net/v2/en/cards/',TTL=24*60*60*1000,KEY='pkb_market_prices_v1';
+  let cache={};
+  try{cache=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){cache={}}
+  const saveCache=()=>{try{localStorage.setItem(KEY,JSON.stringify(cache))}catch(e){}};
+  const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+  const ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
+  const pickPrice=full=>{
+    const tp=full&&full.pricing&&full.pricing.tcgplayer;if(!tp)return null;
+    const val=v=>{if(!v||typeof v!=='object')return null;const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);return p!=null&&Number(p)>0?Number(p):null};
+    for(const k of ORDER){const p=val(tp[k]);if(p!=null)return p}
+    for(const k of Object.keys(tp)){const p=val(tp[k]);if(p!=null)return p}
+    return null;
+  };
+  const allCards=b=>b.pages.flatMap(p=>p.cards.filter(c=>c&&c.id));
+  const binderTotals=b=>{let sum=0,missing=0;for(const c of allCards(b)){const h=cache[String(c.id)];if(h&&h.p!=null)sum+=h.p;else missing++}return {sum,missing,count:allCards(b).length}};
+
+  // Panel above the binder tiles
+  const panel=document.createElement('div');panel.className='panel';
+  panel.innerHTML='<div class="row" style="justify-content:space-between;gap:10px"><div><strong>Total market value, all binders</strong><div id="valTotal" style="font-size:1.4rem;font-weight:700;color:var(--accent)">…</div><div id="valSub" class="note"></div></div><button id="valRefreshBtn" type="button">Refresh prices</button></div><p id="valStatus" class="status" aria-live="polite"></p>';
+  $('libraryGrid').insertAdjacentElement('beforebegin',panel);
+
+  // Put a "Binder Total Value" line under each binder tile
+  const decorate=()=>{
+    const wraps=document.querySelectorAll('#libraryGrid .tile-wrap');
+    wraps.forEach((wrap,i)=>{
+      const b=binders[i];if(!b)return;
+      let holder=wrap.parentElement;
+      if(!holder.classList.contains('valHolder')){
+        holder=document.createElement('div');holder.className='valHolder';
+        wrap.replaceWith(holder);holder.append(wrap);
+        const l=document.createElement('div');l.className='binderValue';
+        l.style.cssText='text-align:center;font-size:.85rem;margin-top:6px;color:var(--muted)';
+        holder.append(l);
+      }
+      const t=binderTotals(b),l=holder.querySelector('.binderValue');
+      const known=t.count-t.missing;
+      l.textContent='';
+      if(t.count===0){l.textContent='Binder Total Value: $0.00';return}
+      if(known===0){l.textContent='Binder Total Value: calculating…';return}
+      const s=document.createElement('strong');s.style.color='var(--accent)';s.textContent=fmt(t.sum);
+      l.append('Binder Total Value: ',s);
+      if(t.missing>0)l.append(' · '+t.missing+' without a price');
+    });
+  };
+  const updatePanel=()=>{
+    let sum=0,missing=0,count=0;
+    for(const b of binders){const t=binderTotals(b);sum+=t.sum;missing+=t.missing;count+=t.count}
+    $('valTotal').textContent=fmt(sum);
+    $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
+  };
+  const refreshUI=()=>{decorate();updatePanel()};
+
+  // Fetch prices (cached for 24 hours, 5 at a time)
+  let running=false;
+  const refreshPrices=async force=>{
+    if(running)return;
+    const ids=[...new Set(binders.flatMap(b=>allCards(b).map(c=>String(c.id))))];
+    const now=Date.now();
+    const todo=ids.filter(id=>force||!cache[id]||now-cache[id].t>TTL);
+    refreshUI();
+    if(!todo.length){setStatus('valStatus','');return}
+    running=true;$('valRefreshBtn').disabled=true;
+    const total=todo.length;let done=0;
+    const worker=async()=>{
+      while(todo.length){
+        const id=todo.shift();
+        try{
+          const r=await fetch(API+encodeURIComponent(id));
+          if(r.ok){cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
+          else if(r.status===404){cache[id]={p:null,t:Date.now()}}
+        }catch(e){}
+        done++;
+        setStatus('valStatus','Fetching prices… '+done+' of '+total);
+        if(done%10===0){saveCache();refreshUI()}
+      }
+    };
+    await Promise.all(Array.from({length:5},worker));
+    running=false;$('valRefreshBtn').disabled=false;
+    saveCache();refreshUI();
+    setStatus('valStatus','Prices updated.');
+  };
+  $('valRefreshBtn').onclick=()=>refreshPrices(true);
+
+  // Hook into the existing screens
+  const origRL=renderLibrary;
+  renderLibrary=function(){origRL.apply(this,arguments);decorate();if(typeof updatePanel==='function')updatePanel()};
+  const origSL=showLibrary;
+  showLibrary=function(){origSL.apply(this,arguments);refreshPrices(false)};
+
+  // Market value line in the card pop-up
+  $('cardModalMeta').insertAdjacentHTML('afterend','<p id="marketLine" class="note" style="margin-top:6px"></p>');
+  const prevOpen=openCardModal;
+  openCardModal=function(card){
+    prevOpen.apply(this,arguments);
+    const el=$('marketLine');el.textContent='';el.dataset.id=card&&card.id?String(card.id):'';
+    if(!card||!card.id)return;
+    const id=String(card.id),hit=cache[id];
+    if(hit&&hit.p!=null){el.textContent='Market value: '+fmt(hit.p);return}
+    if(hit){el.textContent='No market price available for this card.';return}
+    el.textContent='Checking market value…';
+    fetch(API+encodeURIComponent(id)).then(r=>r.ok?r.json():null).then(full=>{
+      if(full){cache[id]={p:pickPrice(full),t:Date.now()};saveCache()}
+      if(el.dataset.id!==id)return;
+      const p=cache[id]&&cache[id].p;
+      el.textContent=p!=null?'Market value: '+fmt(p):'No market price available for this card.';
+    }).catch(()=>{if(el.dataset.id===id)el.textContent=''});
+  };
+}catch(err){console.error('Market value patch failed:',err)}
+</script></body></html>
