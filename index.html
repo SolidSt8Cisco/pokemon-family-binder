@@ -28,7 +28,6 @@ const SUPABASE_URL='https://whbuikfheckjebgeglpu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_r5qzENvZgLryyZK_QKSwbQ_C19GIhj_';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const $=id=>document.getElementById(id);
-// activeSlot === null means "put the card in the next blank pocket"; a number means "replace that pocket"
 let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, activeSlot=null, lastFocus=null, cloudBusy=false, saveTimers={};
 const blankCards=()=>Array(9).fill(null);
 function setStatus(id,msg){$(id).textContent=msg}
@@ -39,7 +38,7 @@ function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.tog
 function showLibrary(){activeBinderId=null;$('binderView').classList.add('hidden');$('libraryView').classList.remove('hidden');renderLibrary();renderCollection()}
 function showBinder(id){activeBinderId=id;activePageIndex=0;$('libraryView').classList.add('hidden');$('binderView').classList.remove('hidden');renderBinder()}
 
-/* ---------- Collection list (alphabetical + searchable, across all binders) ---------- */
+/* ---------- Collection list ---------- */
 function renderCollection(){
   const q=$('collQuery').value.trim().toLowerCase(),all=[];
   for(const b of binders)for(const p of b.pages)p.cards.forEach((c,i)=>{if(c)all.push({card:c,binder:b.name,page:p.pageNumber,slot:i+1})});
@@ -47,7 +46,7 @@ function renderCollection(){
   all.sort((a,b)=>a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'})||String(a.card.id).localeCompare(String(b.card.id)));
   const shown=q?all.filter(x=>x.card.name.toLowerCase().includes(q)||String(x.card.id).toLowerCase().includes(q)):all;
   const list=$('collList');list.innerHTML='';
-  setStatus('collCount',q?`${shown.length} match${shown.length===1?'':'es'} for “${$('collQuery').value.trim()}” (${all.length} cards total)`:`${all.length} card${all.length===1?'':'s'} in your collection`);
+  setStatus('collCount',q?`${shown.length} match${shown.length===1?'':'es'} for "${$('collQuery').value.trim()}" (${all.length} cards total)`:`${all.length} card${all.length===1?'':'s'} in your collection`);
   for(const x of shown){
     const row=document.createElement('button');row.type='button';row.className='item';
     row.setAttribute('aria-label','View '+x.card.name);
@@ -110,7 +109,6 @@ $('clearPageBtn').onclick=()=>{const p=currentPage();if(!p)return;if(confirm(`Cl
 
 /* ---------- Adding cards ---------- */
 function cardImageUrl(base,quality='high'){if(!base)return '';return /\/(high|low)\.(webp|png|jpg)$/i.test(base)?base:base.replace(/\/$/,'')+'/'+quality+'.webp'}
-// Put a card in the first empty pocket (page by page). If every page is full, start a new page.
 function addToNextBlank(card){
   const b=currentBinder();if(!b)throw new Error('Open a binder first');
   for(let pi=0;pi<b.pages.length;pi++){const si=b.pages[pi].cards.findIndex(c=>!c);if(si!==-1){b.pages[pi].cards[si]=card;activePageIndex=pi;return {page:pi+1,slot:si+1}}}
@@ -119,4 +117,19 @@ function addToNextBlank(card){
   activePageIndex=b.pages.length-1;return {page:b.pages.length,slot:1}
 }
 $('addCardBtn').onclick=()=>openSearch(null);
-function openSearch(slotIndex){activeSlot=slotIndex;lastFocus=document.activeElement;$('searchModal').classList.add('open');$('results').innerHTML='';$
+function openSearch(slotIndex){activeSlot=slotIndex;lastFocus=document.activeElement;$('searchModal').classList.add('open');$('results').innerHTML='';$('modalTitle').textContent=slotIndex===null?'Add a Pokémon card':'Replace this card';setStatus('searchStatus',slotIndex===null?'Search a name, then tap the card you own. It goes into the next open pocket.':'Search a name, then tap the card to put in this pocket.');$('query').value='';$('query').focus()}
+function closeSearch(){$('searchModal').classList.remove('open');if(lastFocus&&lastFocus.focus)lastFocus.focus()}
+$('closeSearchBtn').onclick=closeSearch;$('searchModal').addEventListener('click',e=>{if(e.target===$('searchModal'))closeSearch()});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if($('cardModal').classList.contains('open'))closeCardModal();
+  else closeSearch();
+});
+$('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('query').value.trim();if(!q)return;setStatus('searchStatus','Searching TCGdex…');$('results').innerHTML='';try{const response=await fetch('https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(q)+'&pagination:itemsPerPage=50');if(!response.ok)throw new Error('Card service returned HTTP '+response.status);const data=await response.json();const matches=(Array.isArray(data)?data:[]).filter(c=>c.image);if(!matches.length){setStatus('searchStatus','No matching cards with images found. Try a shorter or different name.');return}setStatus('searchStatus',`Found ${matches.length} result${matches.length===1?'':'s'}. Tap the card you own.`);for(const c of matches.slice(0,50)){const b=document.createElement('button');b.className='result';const img=document.createElement('img');img.loading='lazy';img.alt=c.name;img.src=cardImageUrl(c.image,'low');img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=cardImageUrl(c.image,'low').replace(/\.webp$/i,'.png')}else img.style.display='none'};const name=document.createElement('strong');name.textContent=c.name;const detail=document.createElement('small');detail.textContent=[c.set?.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id;b.append(img,name,detail);b.onclick=async()=>{b.disabled=true;try{let full=c;const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));if(r.ok)full=await r.json();const card={id:full.id||c.id,name:full.name||c.name,image:cardImageUrl(full.image||c.image,'high'),setName:full.set?.name||c.set?.name||'',localId:full.localId||c.localId||''};if(activeSlot===null){const spot=addToNextBlank(card);renderBinder();saveBinderSoon('Card added. Saving…');$('results').innerHTML='';$('query').value='';$('query').focus();setStatus('searchStatus',`Added ${card.name} to page ${spot.page}, pocket ${spot.slot}. Search for another card, or close this window.`)}else{const p=currentPage();if(!p)throw new Error('Open a binder first');p.cards[activeSlot]=card;renderCards();closeSearch();saveBinderSoon('Card replaced. Saving…')}}catch(err){b.disabled=false;setStatus('searchStatus','Could not load this card. Please try again.')}};$('results').append(b)}}catch(err){console.error(err);setStatus('searchStatus','Search failed. Check your internet connection and try again.')}});
+
+$('exportBtn').onclick=()=>{const payload={format:'pokemon-family-binder-backup-v3',exportedAt:new Date().toISOString(),binders:binders.map(b=>({id:b.id,name:b.name,cover_image:b.cover_image,is_default:b.is_default,pages:b.pages.map(p=>({pageNumber:p.pageNumber,cards:p.cards}))}))};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pokemon-family-binders-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+$('authForm').addEventListener('submit',async e=>{e.preventDefault();$('signInBtn').disabled=true;setStatus('authStatus','Signing in…');try{const {data,error}=await supabaseClient.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;signedInUser=data.user;updateAuthUi();await loadLibrary()}catch(err){setStatus('authStatus','Sign-in failed: '+(err.message||'check email and password'))}finally{$('signInBtn').disabled=false}});
+$('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUser=null;binders=[];activeBinderId=null;updateAuthUi();setStatus('authStatus','Signed out. Sign in again to view the family binders.')};
+supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
+updateAuthUi();
+</script></body></html>
