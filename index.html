@@ -102,8 +102,31 @@ async function createBinder(){if(!signedInUser)return;const name=prompt('Name th
 async function updateBinder(fields){const b=currentBinder();if(!b)return;try{const {data,error}=await supabaseClient.from('family_binders').update(fields).eq('id',b.id).eq('family_id',signedInUser.id).select('id,family_id,name,cover_image,is_default,sort_order,created_at').single();if(error)throw error;Object.assign(b,data);renderLibrary();renderBinder();setStatus('binderStatus','Binder details saved and synced.')}catch(e){console.error(e);setStatus('binderStatus','Could not save binder details: '+(e.message||'database error'))}}
 $('renameBtn').onclick=()=>{const b=currentBinder();if(!b)return;const name=prompt('Rename this binder:',b.name);if(name===null)return;if(!name.trim()){alert('Binder name cannot be empty.');return}updateBinder({name:name.trim()})};
 $('coverBtn').onclick=()=>$('coverFile').click();
-$('coverFile').onchange=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;if(!file.type.startsWith('image/')){alert('Please choose an image file.');return}try{const dataUrl=await compressImage(file);await updateBinder({cover_image:dataUrl})}catch(err){alert('Could not use that image. Please try another picture.')}};
-function compressImage(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=600,scale=Math.min(1,max/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.78))};img.src=reader.result};reader.readAsDataURL(file)})}
+$('coverFile').onchange=async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;if(!file.type.startsWith('image/')){alert('Please choose an image file.');return}try{const imageUrl = await uploadCoverImage(file);await updateBinder({ cover_image: imageUrl })}catch(err){alert('Could not use that image. Please try another picture.')}};
+// Uploads the file to Supabase Storage and returns the public URL
+async function uploadCoverImage(file) {
+  // Create a unique filename so you never overwrite an old image
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+  const filePath = `public/${fileName}`;
+
+  // Upload the file to the 'binder-covers' bucket
+  const { data, error } = await supabaseClient.storage
+    .from('Pokemon') // Make sure this matches your bucket name exactly
+    .upload(filePath, file);
+
+  if (error) {
+    console.error('Upload error:', error);
+    throw new Error('Could not upload image.');
+  }
+
+  // Get the public URL for the uploaded image
+  const { data: urlData } = supabaseClient.storage
+    .from('Pokemon')
+    .getPublicUrl(filePath);
+
+  return urlData.publicUrl;
+}
 function saveBinderSoon(message){const b=currentBinder();if(!b)return;setStatus('binderStatus',message||'Saving changes…');clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
 async function pushBinder(binderId){if(!signedInUser)return;const b=binders.find(x=>x.id===binderId);if(!b)return;if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}cloudBusy=true;setStatus('binderStatus','Saving this binder to the cloud…');try{const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));if(pageRows.length){const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});if(error)throw error}const desired=[];for(const p of b.pages)p.cards.forEach((card,i)=>{if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image})});if(desired.length){const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});if(error)throw error}const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(readError)throw readError;const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);if(error)throw error}const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(pageReadError)throw pageReadError;const wantedPages=new Set(b.pages.map(p=>p.pageNumber));for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);if(error)throw error}setStatus('binderStatus','Cloud sync complete. '+desired.length+' card'+(desired.length===1?'':'s')+' saved in this binder.')}catch(e){console.error(e);setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'))}finally{cloudBusy=false}}
 $('backBtn').onclick=()=>showLibrary();$('prevPageBtn').onclick=()=>{if(activePageIndex>0){activePageIndex--;renderBinder()}};$('nextPageBtn').onclick=()=>{const b=currentBinder();if(b&&activePageIndex<b.pages.length-1){activePageIndex++;renderBinder()}};
