@@ -2022,4 +2022,317 @@ try{
     throw last;
   };
 }catch(err){console.error('Retry patch failed:',err)}
+</script><script>
+/* PATCH: scan a card by PICTURE. Type the Pokémon name in a search box, tap 📷, photograph the card. To undo: delete this whole <script> block. */
+try{
+  const MODEL='Xenova/mobileclip_s2'; // lighter and faster: 'Xenova/mobileclip_s1'
+  const MAXC=150;                      // most candidate pictures compared per scan
+  const h=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const norm=s=>String(s==null?'':s).replace(/^0+(?=\d)/,'').toLowerCase();
+  const S={mode:'own',url:'',blob:null,view:'busy',msg:'',note:'',done:'',name:'',num:null,cands:[],card:null,skip:false,pre:''};
+  const loadImg=url=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Could not read that photo.'));i.src=url});
+  const parseTyped=raw=>{
+    let t=raw.trim(),num=null,m;
+    if((m=t.match(/#?\s*([A-Za-z]*\d+[A-Za-z]*)\s*\/\s*\d+/))){num=m[1];t=t.replace(m[0],' ')}
+    else if((m=t.match(/#\s*([A-Za-z0-9.-]+)/))){num=m[1];t=t.replace(m[0],' ')}
+    else if((m=t.match(/\s(\d{1,3})$/))){num=m[1];t=t.replace(m[0],' ')}
+    return {name:t.replace(/\s+/g,' ').trim(),num};
+  };
+  const imgUrl=c=>cardImageUrl(c.image,'low');
+
+  /* ---------- find the card in the photo and crop to it ---------- */
+  const cropToCard=async img=>{
+    try{
+      const W=400,s=W/img.naturalWidth,H=Math.round(img.naturalHeight*s);
+      const sm=document.createElement('canvas');sm.width=W;sm.height=H;
+      const g=sm.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0,W,H);
+      const d=g.getImageData(0,0,W,H).data;
+      let r=0,gr=0,b=0,n=0;
+      const add=(x,y)=>{const i=(y*W+x)*4;r+=d[i];gr+=d[i+1];b+=d[i+2];n++};
+      for(let x=0;x<W;x+=3){add(x,0);add(x,2);add(x,H-1);add(x,H-3)}
+      for(let y=0;y<H;y+=3){add(0,y);add(2,y);add(W-1,y);add(W-3,y)}
+      r/=n;gr/=n;b/=n;
+      const rows=new Array(H).fill(0),cols=new Array(W).fill(0);
+      for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;if(Math.abs(d[i]-r)+Math.abs(d[i+1]-gr)+Math.abs(d[i+2]-b)>100){rows[y]++;cols[x]++}}
+      const first=(a,min)=>a.findIndex(v=>v>=min),last=(a,min)=>{for(let i=a.length-1;i>=0;i--)if(a[i]>=min)return i;return -1};
+      let x0=first(cols,H*.3),x1=last(cols,H*.3),y0=first(rows,W*.3),y1=last(rows,W*.3);
+      if(x0<0||y0<0||x1-x0<W*.3||y1-y0<H*.3)return img;
+      let bw=x1-x0,bh=y1-y0;
+      if(bw/bh>0.714*1.15){const nw=bh*0.714;x0+=(bw-nw)/2;bw=nw}
+      const pad=.012;x0=Math.max(0,x0-W*pad);y0=Math.max(0,y0-H*pad);bw=Math.min(W-x0,bw+W*pad*2);bh=Math.min(H-y0,bh+H*pad*2);
+      if(bw>W*.97&&bh>H*.97)return img;
+      const out=document.createElement('canvas');out.width=Math.round(bw/s);out.height=Math.round(bh/s);
+      out.getContext('2d').drawImage(img,x0/s,y0/s,bw/s,bh/s,0,0,out.width,out.height);
+      const blob=await new Promise(res=>out.toBlob(res,'image/jpeg',.92));
+      if(!blob)return img;
+      if(S.url)URL.revokeObjectURL(S.url);
+      S.blob=blob;S.url=URL.createObjectURL(blob);
+      return await loadImg(S.url);
+    }catch(e){console.warn('Auto-crop skipped:',e);return img}
+  };
+
+  /* ---------- TCGdex ---------- */
+  const tcg=async(name,num)=>{
+    const url='https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(name)+(num?'&localId='+encodeURIComponent(norm(num)):'');
+    let all=[];
+    for(let p=1;p<=4;p++){
+      const r=await fetch(url+'&pagination:page='+p+'&pagination:itemsPerPage=100');
+      if(!r.ok)throw new Error('Card service returned HTTP '+r.status);
+      const d=await r.json();if(!Array.isArray(d))break;
+      all=all.concat(d);if(d.length<100)break;
+    }
+    return num?all.filter(c=>norm(c.localId)===norm(num)):all;
+  };
+  const getFull=async c=>{try{const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));if(r.ok)return await r.json()}catch(e){}return c};
+  const owned=id=>{const o=[];for(const b of binders)for(const p of b.pages)for(const c of p.cards)if(c&&String(c.id)===String(id))o.push({b,p,c});return o};
+  const ownedImage=id=>{const o=owned(id).find(x=>x.c.image);return o?o.c.image:null};
+
+  /* ---------- picture model (MobileCLIP in the browser) + saved results ---------- */
+  let M=null,noGpu=false;
+  const getModel=async()=>{
+    if(M)return M;
+    const T=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+    const processor=await T.AutoProcessor.from_pretrained(MODEL);
+    const make=async dev=>({T,processor,dev,model:await T.CLIPVisionModelWithProjection.from_pretrained(MODEL,dev?{device:dev,dtype:'fp32'}:{dtype:'fp32'})});
+    try{M=(!noGpu&&navigator.gpu)?await make('webgpu'):await make(null)}catch(e){M=await make(null)}
+    return M;
+  };
+  const embed=async src=>{
+    const m=await getModel();
+    try{
+      const image=await m.T.RawImage.read(src);
+      const out=await m.model(await m.processor(image));
+      return Float32Array.from(out.image_embeds.normalize().data);
+    }catch(e){
+      if(m.dev==='webgpu'){M=null;noGpu=true;return embed(src)}
+      throw e;
+    }
+  };
+  const dot=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s};
+  const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('pkb_embeds',1);r.onupgradeneeded=()=>r.result.createObjectStore('e');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+  const idbGet=async k=>{try{const db=await idb();return await new Promise(res=>{const q=db.transaction('e').objectStore('e').get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)})}catch(e){return null}};
+  const idbSet=async(k,v)=>{try{const db=await idb();await new Promise(res=>{const t=db.transaction('e','readwrite');t.objectStore('e').put(v,k);t.oncomplete=()=>res();t.onerror=()=>res()})}catch(e){}};
+  const canFetch=async url=>{try{const r=await fetch(url);return r.ok||r.status===404}catch(e){return false}};
+
+  /* ---------- photo upload (only when TCGdex has no picture for the card) ---------- */
+  const shrink=(blob,max=900)=>new Promise((res,rej)=>{
+    const u=URL.createObjectURL(blob),i=new Image();
+    i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('Could not read the photo.'))};
+    i.onload=()=>{const s=Math.min(1,max/Math.max(i.width,i.height)),cv=document.createElement('canvas');cv.width=Math.round(i.width*s);cv.height=Math.round(i.height*s);cv.getContext('2d').drawImage(i,0,0,cv.width,cv.height);URL.revokeObjectURL(u);cv.toBlob(b=>b?res(b):rej(new Error('Could not compress the photo.')),'image/jpeg',.82)};
+    i.src=u;
+  });
+  const uploadPhoto=async()=>{
+    const b=await shrink(S.blob),path='public/card-'+Date.now()+'-'+Math.random().toString(36).slice(2)+'.jpg';
+    const {error}=await supabaseClient.storage.from('Pokemon').upload(path,b,{contentType:'image/jpeg'});
+    if(error)throw new Error('Could not upload the photo: '+error.message);
+    return supabaseClient.storage.from('Pokemon').getPublicUrl(path).data.publicUrl;
+  };
+
+  /* ---------- scan window ---------- */
+  document.body.insertAdjacentHTML('beforeend','<div class="modal" id="scanModal" role="dialog" aria-modal="true" aria-labelledby="scanTitle"><div class="dialog"><div class="dialoghead"><h2 id="scanTitle">Scan a card</h2><button class="close" id="scanClose" aria-label="Close">×</button></div><div id="scanBody" style="margin-top:12px"></div></div></div>');
+  const closeScan=()=>{$('scanModal').classList.remove('open');S.skip=true;if(S.url){URL.revokeObjectURL(S.url);S.url=''}};
+  const photo=()=>S.url?'<img src="'+S.url+'" alt="Your photo" style="display:block;margin:0 auto 10px;max-height:160px;max-width:100%;border-radius:8px">':'';
+  const form='<form id="scanForm" class="searchrow"><input id="scanQ" class="field" placeholder="Pokémon name, like Hippopotas or Pikachu #104" autocomplete="off" required><button type="submit">Search</button></form>';
+  const sub=c=>h([c.set&&c.set.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id);
+  const small=c=>c.image?h(imgUrl(c)):'';
+  const noteHtml=()=>S.note?'<p class="sub" style="margin-top:0">'+h(S.note)+'</p>':'';
+  const btns=(a,b)=>'<div class="row" style="justify-content:flex-end;margin-top:10px">'+a+b+'</div>';
+  const retakeClose=btns('<button type="button" data-act="retake">📷 Retake</button>','<button type="button" data-act="close">Close</button>');
+  const confirmHtml=()=>{
+    const c=S.card,o=owned(c.id),by={};o.forEach(x=>{by[x.b.name]=(by[x.b.name]||0)+1});
+    const ownTxt=o.length?'You own '+o.length+' of this card: '+Object.entries(by).map(([k,v])=>k+(v>1?' ×'+v:'')).join(', '):'You do not own this card.';
+    const b=binders.find(x=>x.id===activeBinderId);
+    const yes=S.mode==='binder'?'Yes, add to '+(b?b.name:'this binder'):S.mode==='cart'?'Yes, add to '+cartOwner+'’s cart':'';
+    return noteHtml()+
+      '<div class="row" style="align-items:flex-start;gap:10px;flex-wrap:nowrap"><div style="flex:1;text-align:center"><div class="note">Your photo</div><img src="'+S.url+'" alt="" style="width:100%;max-height:300px;object-fit:contain;border-radius:8px;background:#111a26"></div><div style="flex:1;text-align:center"><div class="note">Match</div>'+(c.image?'<img src="'+small(c)+'" alt="" style="width:100%;max-height:300px;object-fit:contain;border-radius:8px;background:#111a26">':'<div class="note" style="padding:30px 6px">TCGdex has no picture for this card</div>')+'</div></div>'+
+      '<p style="margin:10px 0 2px"><strong>'+h(c.name)+'</strong><br><span class="note">'+sub(c)+'</span></p>'+
+      '<p style="margin:6px 0;'+(S.mode==='own'?'font-size:1.1rem;font-weight:700':'')+'">'+(S.mode==='own'?(o.length?'✅ ':'❌ '):'')+h(ownTxt)+'</p>'+
+      btns(S.cands.length>1?'<button type="button" data-act="no">See other matches</button>':'<button type="button" data-act="no">Not this one</button>',yes?'<button type="button" class="primary" data-act="yes" style="width:auto;padding:10px 18px">'+h(yes)+'</button>':'<button type="button" class="primary" data-act="close" style="width:auto;padding:10px 18px">Close</button>');
+  };
+  const listHtml=()=>photo()+noteHtml()+'<p class="sub" style="margin:0 0 8px">'+S.cands.length+' cards'+(S.cands.length>30?' (showing 30)':'')+'. Tap the one that matches your photo.</p>'+
+    '<div class="results">'+S.cands.slice(0,30).map((c,i)=>{const n=owned(c.id).length;return '<button type="button" class="result" data-act="pick" data-i="'+i+'">'+(c.image?'<img src="'+small(c)+'" alt="" loading="lazy">':'')+'<strong>'+h(c.name)+'</strong><small>'+sub(c)+(c._sim!=null?' · '+Math.round(c._sim*100)+'% similar':'')+'</small>'+(n?'<span class="result-badge">Owned ×'+n+'</span>':'')+'</button>'}).join('')+'</div>'+retakeClose;
+  const render=()=>{
+    let html;
+    if(S.view==='busy')html=photo()+'<p class="status" aria-live="polite">'+h(S.msg)+'</p>'+(S.msg.indexOf('Comparing')===0?'<div class="row"><button type="button" data-act="skip">Stop and show the list now</button></div>':'');
+    else if(S.view==='needname')html=photo()+'<p class="sub" style="margin-top:0">Which Pokémon is it? Type the name (add the card number if you know it).</p>'+form;
+    else if(S.view==='done')html='<p class="sub" style="margin-top:0"><strong>'+h(S.done)+'</strong></p>'+btns('<button type="button" data-act="again">📷 Scan another</button>','<button type="button" class="primary" data-act="close" style="width:auto;padding:10px 18px">Done</button>');
+    else if(S.view==='confirm'&&S.card)html=confirmHtml();
+    else if(S.view==='list'&&S.cands.length)html=listHtml();
+    else html=photo()+noteHtml()+form+retakeClose;
+    $('scanBody').innerHTML=html;
+  };
+
+  /* ---------- read the name from the photo (no typing needed) ---------- */
+  let tessP=null,worker=null;
+  const getWorker=async()=>{
+    if(worker)return worker;
+    if(!window.Tesseract){
+      tessP=tessP||new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js';s.onload=res;s.onerror=()=>{tessP=null;rej(new Error('Could not load the text reader.'))};document.head.append(s)});
+      await tessP;
+    }
+    worker=await window.Tesseract.createWorker('eng');return worker;
+  };
+  const cropName=img=>{
+    const w=img.naturalWidth,hh=img.naturalHeight,sx=w*.04,sy=hh*.02,sw=w*.76,sh=hh*.11;
+    const cv=document.createElement('canvas');cv.width=1400;cv.height=Math.max(40,Math.round(sh*1400/sw));
+    const g=cv.getContext('2d');g.filter='grayscale(1) contrast(1.5)';g.drawImage(img,sx,sy,sw,sh,0,0,cv.width,cv.height);return cv;
+  };
+  const ocrName=async cv=>{const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});const {data}=await w.recognize(cv);return data.text||''};
+  const BAD=/^(basic|stage|hp|evolves|from|trainer|item|supporter|stadium|tool|put|on|the)$/i;
+  const nameCands=txt=>{
+    const lines=String(txt).split('\n').map(l=>l.replace(/[^A-Za-z'’.\- ]+/g,' ').split(/\s+/).filter(t=>t.length>1&&!BAD.test(t)).join(' ')).filter(l=>l.replace(/[^A-Za-z]/g,'').length>=3);
+    lines.sort((a,b)=>b.replace(/[^A-Za-z]/g,'').length-a.replace(/[^A-Za-z]/g,'').length);
+    const out=[];
+    for(const l of lines.slice(0,2)){out.push(l);for(const t of l.split(' ').filter(t=>t.length>=4).sort((a,b)=>b.length-a.length).slice(0,2))out.push(t)}
+    return [...new Set(out)].slice(0,5);
+  };
+  let species=null;
+  const loadSpecies=async()=>{
+    if(species)return species;
+    try{const c=JSON.parse(localStorage.getItem('pkb_species_v1')||'null');if(Array.isArray(c)&&c.length>500)return species=c}catch(e){}
+    try{const r=await fetch('https://pokeapi.co/api/v2/pokemon-species?limit=2000');if(r.ok){const d=await r.json();species=(d.results||[]).map(x=>x.name);try{localStorage.setItem('pkb_species_v1',JSON.stringify(species))}catch(e){}}}catch(e){}
+    return species||[];
+  };
+  const lev=(a,b)=>{const m=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let p=m[0];m[0]=i;for(let j=1;j<=b.length;j++){const t=m[j];m[j]=Math.min(m[j]+1,m[j-1]+1,p+(a[i-1]===b[j-1]?0:1));p=t}}return m[b.length]};
+  const bestSpecies=async txt=>{
+    const list=await loadSpecies();if(!list.length)return null;
+    const toks=[...new Set(String(txt).toLowerCase().replace(/[^a-z\s]/g,' ').split(/\s+/).filter(t=>t.length>=3))];
+    let best=null;
+    for(const t of toks)for(const sp of list){
+      const k=sp.replace(/[^a-z]/g,''),limit=t.length<5?0:t.length<8?1:2;
+      let d=lev(t,k);
+      if(t.length>=7&&k.length>=5&&t.startsWith(k))d=Math.min(d,1);
+      if(d<=limit&&(!best||d<best.d||(d===best.d&&k.length>best.k.length)))best={d,k,sp};
+    }
+    return best?best.sp.split('-').sort((a,b)=>b.length-a.length)[0]:null;
+  };
+  const exists=async n=>{try{const r=await fetch('https://api.tcgdex.net/v2/en/cards?name='+encodeURIComponent(n)+'&pagination:page=1&pagination:itemsPerPage=1');if(!r.ok)return false;const d=await r.json();return Array.isArray(d)&&d.length>0}catch(e){return false}};
+  
+  /* ---------- the scan ---------- */
+  const process=async()=>{
+    Object.assign(S,{view:'busy',msg:'Searching TCGdex for “'+S.name+'”…',note:'',skip:false,cands:[],card:null});render();
+    try{
+      let c=await tcg(S.name,S.num);
+      if(!c.length&&S.num){c=await tcg(S.name,null);if(c.length)S.note='No card matched that number, so these are all the cards with that name.'}
+      if(!c.length){S.view='none';S.note='No cards found for “'+S.name+'”.';render();return}
+      if(c.length===1){S.cands=c;S.card=c[0];S.view='confirm';render();return}
+      if(c.length>MAXC)S.note+=(S.note?' ':'')+'There are '+c.length+' cards with that name, so I compared only the first '+MAXC+'. Add the card number, or a word like ex or V, to narrow it.';
+      const pool=c.slice(0,MAXC),withImg=pool.filter(x=>x.image),noImg=pool.filter(x=>!x.image);
+      S.msg='Checking that card pictures can be compared…';render();
+      if(!withImg.length||!(await canFetch(imgUrl(withImg[0])))){
+        S.cands=pool;S.view='list';S.note+=(S.note?' ':'')+'The card picture site does not allow picture comparison, so these are not ranked.';render();return;
+      }
+      S.msg='Loading the picture model (the first time downloads it, so use Wi-Fi)…';render();
+      await getModel();
+      S.msg='Looking at your photo…';render();
+      const mine=await embed(S.url);
+      const scored=[];let i=0;
+      for(const x of withImg){
+        if(S.skip)break;
+        i++;S.msg='Comparing pictures… '+i+' of '+withImg.length;render();
+        const key=MODEL+':'+x.id;let v=await idbGet(key);
+        if(!v){try{v=await embed(imgUrl(x));await idbSet(key,v)}catch(e){continue}}
+        x._sim=dot(mine,v);scored.push(x);
+      }
+      if(!$('scanModal').classList.contains('open'))return; // closed while working
+      scored.sort((a,b)=>b._sim-a._sim);
+      S.cands=scored.concat(withImg.filter(x=>!scored.includes(x)),noImg);
+      S.card=scored.length?scored[0]:null;S.view=S.card?'confirm':'list';
+      if(S.card){
+        S.note+=(S.note?' ':'')+'Best match by picture ('+Math.round(S.card._sim*100)+'% similar).';
+        if(scored.length>1&&scored[0]._sim-scored[1]._sim<0.02)S.note+=' Close call: another print looks almost the same, so check the set and number.';
+      }
+    }catch(e){console.error(e);S.view='none';S.note='Something went wrong: '+(e.message||'unknown error')}
+    render();
+  };
+
+  const cam=document.createElement('input');cam.type='file';cam.accept='image/*';cam.setAttribute('capture','environment');cam.className='hidden';document.body.append(cam);
+  const startCam=mode=>{
+    S.mode=mode;
+    const box=mode==='own'?$('collQuery'):mode==='binder'?$('inlineQuery'):$('cartQuery');
+    S.pre=box&&box.value.trim()!=='*'?box.value.trim():'';
+    cam.value='';cam.click();
+  };
+  cam.onchange=()=>{const f=cam.files&&cam.files[0];if(f)run(f)};
+    const run=async file=>{
+    if(S.url)URL.revokeObjectURL(S.url);
+    Object.assign(S,{blob:file,url:URL.createObjectURL(file),view:'busy',msg:'Finding the card in the photo…',note:'',done:'',cands:[],card:null,skip:false,num:null});
+    $('scanModal').classList.add('open');render();
+    let img=null;
+    try{img=await cropToCard(await loadImg(S.url))}catch(e){console.error(e)}
+    let p=parseTyped(S.pre),readName='';
+    if(!p.name&&img){
+      try{
+        S.msg='Reading the card name (the first time loads the text reader)…';render();
+        const txt=await ocrName(cropName(img));
+        let names=nameCands(txt);
+        const sp=await bestSpecies(txt);
+        if(sp)names=[sp,...names.filter(n=>n!==sp)];
+        for(const n of names){if(await exists(n)){p={name:n,num:null};readName=n;break}}
+      }catch(e){console.error(e)}
+    }
+    if(p.name){
+      S.name=p.name;S.num=p.num;
+      await process();
+      if(readName&&S.view!=='busy'){S.note='I read the name as “'+readName+'”. '+S.note;render()}
+    }else{S.view='needname';S.note='I could not read a name from the photo. Type it below, or retake the photo.';render()}
+  };
+  /* ---------- actions ---------- */
+  const addBinder=async()=>{
+    const c=S.card,b=binders.find(x=>x.id===activeBinderId);
+    if(!b){S.view='none';S.note='Open a binder first.';render();return}
+    Object.assign(S,{view:'busy',msg:'Adding to '+b.name+'…'});render();
+    try{
+      const full=await getFull(c);
+      let image=(full.image||c.image)?cardImageUrl(full.image||c.image,'high'):'';
+      if(!image)image=ownedImage(c.id)||await uploadPhoto();
+      const card={id:full.id||c.id,name:full.name||c.name,image,setName:(full.set&&full.set.name)||(c.set&&c.set.name)||'',localId:full.localId||c.localId||'',purchasePrice:null};
+      addToNextBlank(card);renderBinder();saveBinderSoon();
+      S.done='Added '+card.name+' to '+b.name+'.';S.view='done';
+    }catch(e){console.error(e);S.view='confirm';S.note='Could not add it: '+(e.message||'unknown error')}
+    render();
+  };
+  const addCart=async()=>{
+    const c=S.card;Object.assign(S,{view:'busy',msg:'Adding to the cart…'});render();
+    try{
+      const full=await getFull(c);
+      const price=typeof extractPrice==='function'?extractPrice(full):null;
+      let image=(full.image||c.image)?cardImageUrl(full.image||c.image,'high'):'';
+      if(!image)image=ownedImage(c.id)||await uploadPhoto();
+      const lid=full.localId||c.localId;
+      const {error}=await supabaseClient.from('family_shopping_cart').insert({family_id:signedInUser.id,card_id:String(c.id),card_name:full.name||c.name,image_url:image,set_name:(full.set&&full.set.name)||(c.set&&c.set.name)||null,local_id:lid!=null?String(lid):null,online_price:price?price.value:null,price_currency:price?price.currency:null,price_updated:price?price.updated:null,owner:cartOwner});
+      if(error)throw error;
+      await loadCart();refreshCartBadge();renderCart();
+      S.done='Added '+(full.name||c.name)+' to '+cartOwner+'’s cart.';S.view='done';
+    }catch(e){console.error(e);S.view='confirm';S.note='Could not add it: '+(e.message||'database error')}
+    render();
+  };
+  $('scanBody').addEventListener('click',e=>{
+    const el=e.target.closest('[data-act]');if(!el)return;
+    const a=el.dataset.act;
+    if(a==='pick'){S.card=S.cands[+el.dataset.i];S.view='confirm';S.note='';render()}
+    else if(a==='no'){S.card=null;S.view=S.cands.length>1?'list':'none';if(S.view==='none')S.note='Okay. Type the name and number below, or retake the photo.';render()}
+    else if(a==='yes'){if(S.mode==='binder')addBinder();else addCart()}
+    else if(a==='skip')S.skip=true;
+    else if(a==='retake'||a==='again'){const m=S.mode;closeScan();startCam(m)}
+    else if(a==='close')closeScan();
+  });
+  $('scanBody').addEventListener('submit',e=>{
+    if(e.target.id!=='scanForm')return;
+    e.preventDefault();
+    const p=parseTyped($('scanQ').value);
+    if(!p.name)return;
+    S.name=p.name;S.num=p.num;process();
+  });
+  $('scanClose').onclick=closeScan;
+  $('scanModal').addEventListener('click',e=>{if(e.target===$('scanModal'))closeScan()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeScan()});
+
+  /* ---------- the three camera buttons ---------- */
+  const mkBtn=mode=>{const b=document.createElement('button');b.type='button';b.textContent='📷';b.title='Scan a card (type the name first)';b.setAttribute('aria-label','Scan a card');b.onclick=()=>startCam(mode);return b};
+  const q=$('collQuery'),w=document.createElement('div');
+  w.className='row';w.style.flexWrap='nowrap';q.replaceWith(w);q.style.flex='1';w.append(q,mkBtn('own'));
+  $('inlineQuery').insertAdjacentElement('afterend',mkBtn('binder'));
+  $('cartQuery').insertAdjacentElement('afterend',mkBtn('cart'));
+}catch(err){console.error('Picture scan patch failed:',err)}
 </script></body></html>
