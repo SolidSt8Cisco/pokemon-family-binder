@@ -1574,6 +1574,7 @@ try{
   $('cartOpenBtn').insertAdjacentHTML('afterend','<button id="tradeBtn" type="button">🔁 Trade</button><button id="tradeHistBtn" type="button">📜 Trade history</button>');
 
   const st={a:null,b:null,sel:{a:[],b:[]},view:'build',side:'a',date:'',note:'',doneMsg:''};
+  window.pkbTrade=st;
   let phase=null,pickAll=[],pickShown=0;
   const thumb=c=>'<img src="'+h(String(c.image||'').replace('/high.','/low.'))+'" alt="" loading="lazy" style="width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none" onerror="this.style.visibility=\'hidden\'">';
   const sub=c=>h([c.setName,c.localId?'#'+c.localId:c.id].filter(Boolean).join(' · '));
@@ -1734,7 +1735,7 @@ try{
       lock(false);return;
     }
     const cr=c=>({id:String(c.id),n:c.name,s:c.setName||'',l:c.localId||'',v:val(c)});
-    const {error}=await supabaseClient.from('family_trades').insert({family_id:signedInUser.id,traded_on:st.date,binder_a_id:A.id,binder_a_name:A.name,binder_b_id:B.id,binder_b_name:B.name,a_gave:outA.map(cr),b_gave:outB.map(cr),note:st.note||null});
+    const {error}=await supabaseClient.from('family_trades').insert({a_owner:(window.pkbOwners||{})[A.id]||null,b_owner:(window.pkbOwners||{})[B.id]||null,family_id:signedInUser.id,traded_on:st.date,binder_a_id:A.id,binder_a_name:A.name,binder_b_id:B.id,binder_b_name:B.name,a_gave:outA.map(cr),b_gave:outB.map(cr),note:st.note||null});
     phase=null;st.view='done';
     st.doneMsg='<p class="sub" style="margin-top:0"><strong>Trade complete.</strong> '+outA.length+' card'+(outA.length===1?'':'s')+' moved from '+h(A.name)+' to '+h(B.name)+' and '+outB.length+' card'+(outB.length===1?'':'s')+' from '+h(B.name)+' to '+h(A.name)+'. '+(error?'<span style="color:#ff9b9b">It could not be added to the history: '+h(error.message)+'</span>':'It was added to your trade history.')+'</p>';
     renderLibrary();renderCollection();
@@ -1781,4 +1782,109 @@ try{
   $('histModal').addEventListener('click',e=>{if(e.target===$('histModal'))closeHist()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeTrade();closeHist()}});
 }catch(err){console.error('Trade patch failed:',err)}
+</script><script>
+/* PATCH: binder owners + running balance between Dad, Everly and Eli. Needs the trade patch. To undo: delete this whole <script> block. */
+try{
+  const PEOPLE=['Dad','Everly','Eli'];
+  const LIMIT=20; // warn when one person is ahead of another by more than this many dollars
+  const h=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+  const owners=window.pkbOwners=window.pkbOwners||{};
+  let ledger=null;
+  const val=c=>{const id=String(c.id),m=window.pkbManual&&window.pkbManual[id];if(m!=null)return m;const mk=window.pkbMarket,g=mk&&mk.getPrice?mk.getPrice(id):null;return g!=null?g:0};
+  const ownerSel=bid=>'<select data-owner-bid="'+h(bid)+'" class="field" style="width:auto;padding:4px 8px;font-size:.85rem" aria-label="Owner"><option value="">Not set</option>'+PEOPLE.map(p=>'<option'+(owners[bid]===p?' selected':'')+'>'+p+'</option>').join('')+'</select>';
+  // d = value p gave minus value q gave
+  const who=(p,q,d)=>Math.abs(d)<0.005?p+' and '+q+' are even':d>0?q+' is '+fmt(d)+' ahead of '+p:p+' is '+fmt(-d)+' ahead of '+q;
+
+  // Owner pickers under each binder on the home screen
+  const addOwnerRows=()=>{
+    document.querySelectorAll('#libraryGrid .tile-wrap').forEach((wrap,i)=>{
+      const b=binders[i];if(!b)return;
+      let holder=wrap.parentElement;
+      if(!holder.classList.contains('valHolder')){holder=document.createElement('div');holder.className='valHolder';wrap.replaceWith(holder);holder.append(wrap)}
+      let r=holder.querySelector('.ownerRow');
+      if(!r){r=document.createElement('div');r.className='ownerRow';r.style.cssText='text-align:center;margin-top:6px';holder.append(r)}
+      r.innerHTML='<span class="note">Owner </span>'+ownerSel(b.id);
+    });
+  };
+
+  // Running balances from the trade history
+  const refreshLedger=async()=>{
+    if(!signedInUser)return null;
+    const {data,error}=await supabaseClient.from('family_trades').select('binder_a_id,binder_b_id,a_owner,b_owner,a_gave,b_gave').eq('family_id',signedInUser.id).limit(1000);
+    if(error){console.warn('Trade totals not loaded:',error.message);ledger=null;return null}
+    const bal={};let skipped=0;
+    const add=(p,q,d)=>{bal[p]=bal[p]||{};bal[p][q]=(bal[p][q]||0)+d};
+    const tot=l=>(l||[]).reduce((s,c)=>s+(c.v!=null?Number(c.v):0),0);
+    for(const t of data||[]){
+      const X=t.a_owner||owners[t.binder_a_id],Y=t.b_owner||owners[t.binder_b_id];
+      if(!X||!Y){skipped++;continue}
+      if(X===Y)continue;
+      const d=tot(t.a_gave)-tot(t.b_gave);
+      add(X,Y,d);add(Y,X,-d);
+    }
+    ledger={bal,skipped};
+    return ledger;
+  };
+  const loadOwners=async()=>{
+    if(!signedInUser)return;
+    const {data,error}=await supabaseClient.from('family_binders').select('id,owner').eq('family_id',signedInUser.id);
+    if(error){console.warn('Owners not loaded:',error.message);return}
+    for(const k of Object.keys(owners))delete owners[k];
+    for(const r of data||[])if(r.owner)owners[r.id]=r.owner;
+    addOwnerRows();refreshBalance();
+  };
+
+  // Totals panel in Trade history
+  $('histCount').insertAdjacentHTML('afterend','<div id="ownerTotals" class="panel" style="margin-top:8px"></div>');
+  const renderTotals=()=>{
+    const el=$('ownerTotals');
+    if(!ledger){el.textContent='Running balances are not available yet. Check that the owner SQL step was run.';return}
+    const pairs=[[PEOPLE[0],PEOPLE[1]],[PEOPLE[0],PEOPLE[2]],[PEOPLE[1],PEOPLE[2]]];
+    el.innerHTML='<strong>Running balance between owners</strong>'+pairs.map(([p,q])=>{
+      const d=(ledger.bal[p]&&ledger.bal[p][q])||0,over=Math.abs(d)>LIMIT;
+      return '<div style="margin-top:4px;color:'+(over?'#ff8a8a':'inherit')+'">'+h(who(p,q,d))+(over?' ⚠':'')+'</div>';
+    }).join('')+'<div class="note" style="margin-top:6px">Counts trades between binders with different owners, using the values saved at the time of each trade.'+(ledger.skipped?' '+ledger.skipped+' trade'+(ledger.skipped===1?'':'s')+' not counted because a binder had no owner.':'')+'</div>';
+  };
+  $('tradeHistBtn').addEventListener('click',async()=>{$('ownerTotals').textContent='Loading balances…';await refreshLedger();renderTotals()});
+
+  // Owner balance box on the trade review screen
+  const balanceHtml=()=>{
+    const t=window.pkbTrade;if(!t||!t.a||!t.b||t.a===t.b)return '';
+    const A=binders.find(b=>b.id===t.a),B=binders.find(b=>b.id===t.b);if(!A||!B)return '';
+    const X=owners[A.id],Y=owners[B.id];
+    const s='<strong>Owner balance</strong><div class="note" style="margin-top:4px">Owner of '+h(A.name)+' '+ownerSel(A.id)+' &nbsp; Owner of '+h(B.name)+' '+ownerSel(B.id)+'</div>';
+    if(!X||!Y)return s+'<div class="note" style="margin-top:6px">Set both owners to include this trade in the running totals.</div>';
+    if(X===Y)return s+'<div class="note" style="margin-top:6px">Both binders belong to '+h(X)+', so this trade does not change anyone\'s balance.</div>';
+    if(!ledger)return s+'<div class="note" style="margin-top:6px">Running balance not available.</div>';
+    const sumv=l=>l.reduce((a,c)=>a+val(c),0);
+    const now=(ledger.bal[X]&&ledger.bal[X][Y])||0,after=now+sumv(t.sel.a)-sumv(t.sel.b),over=Math.abs(after)>LIMIT;
+    return s+'<div style="margin-top:6px">Now: '+h(who(X,Y,now))+'<br><span style="color:'+(over?'#ff8a8a':'inherit')+'">After this trade: '+h(who(X,Y,after))+(over?' ⚠ over your '+fmt(LIMIT)+' limit'+(Math.abs(after)<Math.abs(now)?' (but closer to even than now)':''):'')+'</span></div>';
+  };
+  const refreshBalance=()=>{
+    const fb=$('fairBox');let el=$('ownerBalance');
+    if(!fb){if(el)el.remove();return}
+    if(!el){el=document.createElement('div');el.id='ownerBalance';el.className='panel';el.style.marginTop='8px';fb.insertAdjacentElement('afterend',el)}
+    const html=balanceHtml();
+    if(el._last!==html){el._last=html;el.innerHTML=html}
+  };
+  new MutationObserver(refreshBalance).observe($('tradeBody'),{childList:true,subtree:true});
+  $('tradeBtn').addEventListener('click',()=>{refreshLedger().then(refreshBalance)});
+
+  // Saving an owner (works from the home screen and the trade screen)
+  document.addEventListener('change',async e=>{
+    const bid=e.target.dataset&&e.target.dataset.ownerBid;if(!bid)return;
+    const owner=e.target.value||null;
+    if(owner)owners[bid]=owner;else delete owners[bid];
+    const {error}=await supabaseClient.from('family_binders').update({owner}).eq('id',bid).eq('family_id',signedInUser.id);
+    if(error)alert('Could not save the owner: '+error.message);
+    addOwnerRows();refreshBalance();
+    refreshLedger().then(()=>{refreshBalance();renderTotals()});
+  });
+
+  const origRL=renderLibrary;
+  renderLibrary=function(){origRL.apply(this,arguments);addOwnerRows()};
+  const origSL=showLibrary;
+  showLibrary=function(){origSL.apply(this,arguments);loadOwners()};
+}catch(err){console.error('Owner balance patch failed:',err)}
 </script></body></html>
