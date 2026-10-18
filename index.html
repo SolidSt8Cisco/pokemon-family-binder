@@ -2106,7 +2106,7 @@ try{
   document.body.insertAdjacentHTML('beforeend','<div class="modal" id="scanModal" role="dialog" aria-modal="true" aria-labelledby="scanTitle"><div class="dialog"><div class="dialoghead"><h2 id="scanTitle">Scan a card</h2><button class="close" id="scanClose" aria-label="Close">×</button></div><div id="scanBody" style="margin-top:12px"></div></div></div>');
   const closeScan=()=>{$('scanModal').classList.remove('open');if(S.url){URL.revokeObjectURL(S.url);S.url=''}};
   const photo=()=>S.url?'<img src="'+S.url+'" alt="Your photo" style="display:block;margin:0 auto 10px;max-height:160px;max-width:100%;border-radius:8px">':'';
-    const readLine=()=>S.read?'<p class="note">I read: “'+h(S.read.raw1.replace(/\s+/g,' ').slice(0,60))+'”'+(S.read.num?' · '+h(S.read.num+(S.read.total?'/'+S.read.total:'')):' · no card number')+'</p>'+(S.shots&&S.shots.length?'<div class="note">What I looked at:</div>'+S.shots.map(s=>'<img src="'+s+'" alt="" style="display:block;width:100%;max-height:48px;object-fit:contain;margin:2px 0;background:#000;border-radius:4px">').join(''):''):'';
+  const readLine=()=>S.read?'<p class="note">I read: “'+h(S.read.raw1.replace(/\s+/g,' ').slice(0,60))+'”'+(S.read.num?' · '+h(S.read.num+(S.read.total?'/'+S.read.total:'')):' · no card number')+'</p>'+(S.numRaws&&S.numRaws.length?'<p class="note">Number text it saw: '+S.numRaws.map(t=>'“'+h(t.slice(0,30))+'”').join(' ')+'</p>':'')+(S.shots&&S.shots.length?'<div class="note">What I looked at:</div>'+S.shots.map(s=>'<img src="'+s+'" alt="" style="display:block;width:100%;max-height:48px;object-fit:contain;margin:2px 0;background:#000;border-radius:4px">').join(''):''):'';
   const form='<form id="scanForm" class="searchrow"><input id="scanQ" class="field" placeholder="Type name and number, like Pikachu #104" autocomplete="off" required><button type="submit">Search</button></form>';
   const sub=c=>h([c.set&&c.set.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id);
   const pic=c=>c.image?'<img src="'+h(c.image.replace(/\/(high|low)\.(webp|png|jpg)$/i,'')+'/low.webp')+'" alt="" style="width:100%;max-height:300px;object-fit:contain;border-radius:8px;background:#111a26">':'<div class="note" style="padding:30px 6px">TCGdex has no picture for this card</div>';
@@ -2208,6 +2208,22 @@ try{
       return await loadImg(S.url);
     }catch(e){console.warn('Auto-crop skipped:',e);return img}
   };
+    const readNumber2=async img=>{
+    const shots=[];S.numRaws=[];
+    const crops=[[.03,.925,.50,.99,'grayscale(1) contrast(1.6)'],[.03,.925,.50,.99,'grayscale(1) invert(1) contrast(1.6)'],[.50,.925,.97,.99,'grayscale(1) contrast(1.6)'],[.50,.925,.97,.99,'grayscale(1) invert(1) contrast(1.6)']];
+    const modes=[['6','0123456789/'],['7','0123456789/'],['7','']];
+    for(const [x0,y0,x1,y1,f] of crops){
+      const cv=crop2(img,x0,y0,x1,y1,f,1800);
+      shots.push(cv.toDataURL('image/jpeg',.5));
+      for(const [psm,wl] of modes){
+        const txt=await ocr(cv,psm,wl);
+        S.numRaws.push(txt.replace(/\s+/g,' ').trim());
+        const m=txt.replace(/\s+/g,'').match(/(\d{1,3})\/(\d{2,3})/); // digits can come out spaced apart
+        if(m)return {num:m[1],total:m[2],shots};
+      }
+    }
+    return {num:null,total:null,shots};
+  };
   /* ---------- the scan itself ---------- */
   const cam=document.createElement('input');cam.type='file';cam.accept='image/*';cam.setAttribute('capture','environment');cam.className='hidden';document.body.append(cam);
   const startCam=mode=>{S.mode=mode;cam.value='';cam.click()};
@@ -2226,7 +2242,7 @@ try{
       const nameCv=crop(img,.04,.02,.80,.13);
       const nameTxt=await ocr(nameCv,'6','');
       S.msg='Reading the card number…';render();
-      const nm=await readNumber(img);
+      const nm=await readNumber2(img);
       S.shots=[nameCv.toDataURL('image/jpeg',.5),...nm.shots];
       let names=nameCands(nameTxt);
       const sp=await bestSpecies(nameTxt);
