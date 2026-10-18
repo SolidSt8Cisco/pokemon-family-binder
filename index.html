@@ -1994,4 +1994,32 @@ try{
     $('noPriceModal').classList.add('open');
   };
 }catch(err){console.error('No-price editing patch failed:',err)}
+</script><script>
+/* PATCH: retry price lookups that fail or time out. To undo: delete this whole <script> block. */
+try{
+  const realFetch=window.fetch.bind(window);
+  const watched=u=>/^https:\/\/api\.pokemontcg\.io\//.test(u)||/^https:\/\/api\.tcgdex\.net\/v2\/en\/cards\//.test(u);
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  window.fetch=async function(input,init){
+    const url=typeof input==='string'?input:(input&&input.url)||'';
+    if(!watched(url))return realFetch(input,init);
+    const opts=Object.assign({},init||{});delete opts.signal; // use our own, longer timeout
+    let last;
+    for(let attempt=0;attempt<3;attempt++){
+      const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),15000);
+      try{
+        const r=await realFetch(input,Object.assign({},opts,{signal:ctl.signal}));
+        clearTimeout(to);
+        if(r.status!==429&&r.status<500)return r;
+        last=r;
+        if(attempt<2){const ra=Number(r.headers.get('retry-after'));await sleep(ra>0?Math.min(ra,15)*1000:2000*(attempt+1)*(attempt+1))}
+      }catch(e){
+        clearTimeout(to);last=e;
+        if(attempt<2)await sleep(2000*(attempt+1)*(attempt+1));
+      }
+    }
+    if(last instanceof Response)return last;
+    throw last;
+  };
+}catch(err){console.error('Retry patch failed:',err)}
 </script></body></html>
