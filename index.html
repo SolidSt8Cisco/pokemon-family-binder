@@ -1516,4 +1516,155 @@ try{
   new MutationObserver(()=>{if($('valStatus').textContent==='Prices updated.')push().catch(e=>console.warn(e))})
     .observe($('valStatus'),{childList:true,characterData:true,subtree:true});
 }catch(err){console.error('Price sync patch failed:',err)}
+</script><script>
+/* PATCH: trades between your binders + trade history. To undo: delete this whole <script> block. */
+try{
+  const h=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+  const bn=id=>binders.find(b=>b.id===id);
+  const cmp=(x,y)=>String(x.name||'').localeCompare(String(y.name||''),undefined,{sensitivity:'base'})||String(x.id||'').localeCompare(String(y.id||''));
+  // value of a card: your own value first, then the market price (null = none)
+  const val=c=>{const id=String(c.id),m=window.pkbManual&&window.pkbManual[id];if(m!=null)return m;const mk=window.pkbMarket,g=mk&&mk.getPrice?mk.getPrice(id):null;return g!=null?g:null};
+  const sum=list=>{let s=0,miss=0;for(const c of list){const v=val(c);if(v==null)miss++;else s+=v}return {s,miss}};
+  const loc=(b,c)=>{for(const p of b.pages){const i=p.cards.indexOf(c);if(i>=0)return 'page '+p.pageNumber+', pocket '+(i+1)}return ''};
+
+  document.body.insertAdjacentHTML('beforeend',
+   '<div class="modal" id="tradeModal" role="dialog" aria-modal="true" aria-labelledby="tradeTitle"><div class="dialog"><div class="dialoghead"><h2 id="tradeTitle">Trade between binders</h2><button class="close" id="tradeClose" aria-label="Close">×</button></div><div id="tradeBody" style="margin-top:12px"></div></div></div>'+
+   '<div class="modal" id="histModal" role="dialog" aria-modal="true" aria-labelledby="histTitle"><div class="dialog"><div class="dialoghead"><h2 id="histTitle">Trade history</h2><button class="close" id="histClose" aria-label="Close">×</button></div><input id="histQ" class="field" type="search" placeholder="Search by card, binder, or date…" autocomplete="off" style="margin-top:12px"><p id="histCount" class="status" aria-live="polite"></p><div id="histList"></div></div></div>');
+  $('cartOpenBtn').insertAdjacentHTML('afterend','<button id="tradeBtn" type="button">🔁 Trade</button><button id="tradeHistBtn" type="button">📜 Trade history</button>');
+
+  const st={a:null,b:null,sel:{a:[],b:[]},view:'build',side:'a',date:'',note:'',doneMsg:''};
+  let pickAll=[],pickShown=0;
+  const thumb=c=>'<img src="'+h(String(c.image||'').replace('/high.','/low.'))+'" alt="" loading="lazy" style="width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none" onerror="this.style.visibility=\'hidden\'">';
+  const row=(c,extra)=>{const v=val(c);return '<div class="item" style="cursor:default">'+thumb(c)+'<div class="meta"><strong>'+h(c.name)+'</strong><small>'+h([c.setName,c.localId?'#'+c.localId:c.id].filter(Boolean).join(' · '))+(v!=null?' · '+fmt(v):' · no price')+'</small></div>'+(extra||'')+'</div>'};
+  const opts=sel=>binders.map(b=>'<option value="'+h(b.id)+'"'+(b.id===sel?' selected':'')+'>'+h(b.name)+'</option>').join('');
+
+  const fair=()=>{
+    const A=sum(st.sel.a),B=sum(st.sel.b),t=A.s+B.s,pa=t>0?Math.round(A.s/t*100):50,d=A.s-B.s,na=h(bn(st.a).name),nb=h(bn(st.b).name);
+    return '<div style="margin:10px 0"><div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#35465c"><div style="width:'+pa+'%;background:#6ea8ff"></div><div style="width:'+(100-pa)+'%;background:#ffd34e"></div></div>'+
+      '<div class="note" style="margin-top:6px"><span style="color:#6ea8ff">■</span> '+na+' gives '+fmt(A.s)+' · <span style="color:#ffd34e">■</span> '+nb+' gives '+fmt(B.s)+'<br>'+
+      (Math.abs(d)<0.005?'Even trade by market value.':(d>0?na:nb)+' gives '+fmt(Math.abs(d))+' more.')+
+      (A.miss+B.miss?' '+(A.miss+B.miss)+' card(s) without a price count as $0.':'')+'</div></div>';
+  };
+  const side=k=>{
+    const b=bn(st[k]),list=st.sel[k];
+    return '<div class="panel" style="margin-bottom:10px"><label class="note" for="tsel'+k+'">'+(k==='a'?'First binder':'Second binder')+'</label><select id="tsel'+k+'" data-sel="'+k+'" class="field" style="margin:4px 0 10px">'+opts(st[k])+'</select>'+
+      '<strong>'+h(b.name)+' gives:</strong>'+(list.length?'':'<p class="note" style="margin:6px 0">Nothing (a one-sided trade is fine).</p>')+
+      '<div class="list" style="grid-template-columns:1fr">'+list.map((c,i)=>row(c,'<button type="button" data-act="rm" data-k="'+k+'" data-i="'+i+'" aria-label="Remove" style="margin-left:auto">×</button>')).join('')+'</div>'+
+      '<button type="button" data-act="pick" data-k="'+k+'" style="margin-top:8px">＋ Add cards from '+h(b.name)+'</button></div>';
+  };
+  const buildHtml=()=>{
+    if(binders.length<2)return '<p class="sub">You need at least two binders to trade.</p>';
+    const ok=st.a!==st.b&&st.sel.a.length+st.sel.b.length>0;
+    return side('a')+side('b')+(st.a!==st.b?fair():'<p class="status">Pick two different binders.</p>')+
+      '<div class="row" style="justify-content:flex-end;margin-top:12px"><button type="button" data-act="close">Cancel</button><button type="button" class="primary" data-act="review" style="width:auto;padding:10px 18px"'+(ok?'':' disabled')+'>Review trade</button></div>';
+  };
+  const pickHtml=()=>'<p class="sub" style="margin:0 0 8px">Cards in '+h(bn(st[st.side]).name)+'. Tick the ones that are leaving.</p><input id="pickQ" class="field" type="search" placeholder="Search this binder…" autocomplete="off"><p id="pickCount" class="status"></p><div id="pickList" class="list" style="grid-template-columns:1fr"></div><div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="primary" data-act="done" style="width:auto;padding:10px 18px">Done</button></div>';
+  const pc=()=>{$('pickCount').textContent=pickShown+' shown · '+st.sel[st.side].length+' selected'};
+  const pickList=()=>{
+    const k=st.side,b=bn(st[k]),q=($('pickQ').value||'').trim().toLowerCase();
+    pickAll=b.pages.flatMap(p=>p.cards.filter(Boolean)).sort(cmp);
+    const shown=q?pickAll.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).toLowerCase().includes(q)):pickAll;
+    pickShown=shown.length;pc();
+    $('pickList').innerHTML=shown.map(c=>row(c,'<label style="margin-left:auto;display:flex;gap:6px;align-items:center;white-space:nowrap"><span class="note">'+h(loc(b,c))+'</span><input type="checkbox" data-act="tick" data-k="'+k+'" data-i="'+pickAll.indexOf(c)+'"'+(st.sel[k].includes(c)?' checked':'')+' style="width:22px;height:22px"></label>')).join('');
+  };
+  const confirmHtml=()=>{
+    const A=bn(st.a),B=bn(st.b);
+    const part=(f,t,list)=>{const s=sum(list);return '<div class="panel" style="margin-bottom:10px"><strong>'+h(f.name)+' → '+h(t.name)+'</strong><div class="note">'+(list.length?list.length+' card'+(list.length===1?'':'s')+' · '+fmt(s.s):'No cards')+'</div><div class="list" style="grid-template-columns:1fr">'+list.map(c=>row(c)).join('')+'</div></div>'};
+    return part(A,B,st.sel.a)+part(B,A,st.sel.b)+fair()+
+      '<div class="row"><label class="note" for="tDate">Date of trade</label><input id="tDate" type="date" class="field" style="width:auto" value="'+h(st.date)+'"></div><input id="tNote" class="field" style="margin-top:8px" maxlength="200" placeholder="Note (optional)" value="'+h(st.note)+'"><p id="tMsg" class="status" aria-live="polite"></p>'+
+      '<div class="row" style="justify-content:flex-end"><button type="button" data-act="back">Back</button><button type="button" class="primary" data-act="go" style="width:auto;padding:10px 18px">Complete trade</button></div>';
+  };
+  const render=()=>{
+    $('tradeBody').innerHTML=st.view==='pick'?pickHtml():st.view==='confirm'?confirmHtml():st.view==='done'?st.doneMsg+'<div class="row" style="justify-content:flex-end"><button type="button" class="primary" data-act="close" style="width:auto;padding:10px 18px">Close</button></div>':buildHtml();
+    if(st.view==='pick')pickList();
+  };
+  const closeTrade=()=>$('tradeModal').classList.remove('open');
+
+  $('tradeBody').addEventListener('click',e=>{
+    const el=e.target.closest('[data-act]');if(!el)return;
+    const act=el.dataset.act,k=el.dataset.k;
+    if(act==='rm'){st.sel[k].splice(+el.dataset.i,1);render()}
+    else if(act==='pick'){st.side=k;st.view='pick';render()}
+    else if(act==='done'){st.view='build';render()}
+    else if(act==='tick'){const c=pickAll[+el.dataset.i],l=st.sel[k],i=l.indexOf(c);if(el.checked){if(i<0)l.push(c)}else if(i>=0)l.splice(i,1);pc()}
+    else if(act==='review'){st.view='confirm';render()}
+    else if(act==='back'){st.date=$('tDate').value;st.note=$('tNote').value;st.view='build';render()}
+    else if(act==='close')closeTrade();
+    else if(act==='go')complete();
+  });
+  $('tradeBody').addEventListener('change',e=>{const k=e.target.dataset.sel;if(k){st[k]=e.target.value;st.sel[k]=[];render()}});
+  $('tradeBody').addEventListener('input',e=>{if(e.target.id==='pickQ')pickList()});
+
+  // Move the cards, save both binders, then write the history row
+  const snap=b=>b.pages.map(p=>({pageNumber:p.pageNumber,cards:p.cards.slice()}));
+  const restore=(b,s)=>{b.pages=s.map(p=>({pageNumber:p.pageNumber,cards:p.cards.slice()}))};
+  const relayout=(b,keep)=>{
+    keep.sort(cmp);
+    const need=Math.max(1,Math.ceil(keep.length/9));
+    while(b.pages.length<need)b.pages.push({pageNumber:Math.max(0,...b.pages.map(p=>p.pageNumber))+1,cards:blankCards()});
+    b.pages=b.pages.slice(0,need);
+    b.pages.forEach((p,pi)=>{p.cards=blankCards();for(let i=0;i<9;i++)p.cards[i]=keep[pi*9+i]||null});
+  };
+  const complete=async()=>{
+    const A=bn(st.a),B=bn(st.b);if(!A||!B||A===B)return;
+    st.date=$('tDate').value||todayStr();st.note=$('tNote').value.trim();
+    const btn=document.querySelector('#tradeBody [data-act="go"]');btn.disabled=true;
+    const say=t=>{const m=$('tMsg');if(m)m.textContent=t};
+    say('Moving cards and saving…');
+    const sA=snap(A),sB=snap(B),outA=st.sel.a.slice(),outB=st.sel.b.slice();
+    const keepA=A.pages.flatMap(p=>p.cards.filter(c=>c&&!outA.includes(c))).concat(outB);
+    const keepB=B.pages.flatMap(p=>p.cards.filter(c=>c&&!outB.includes(c))).concat(outA);
+    relayout(A,keepA);relayout(B,keepB);
+    const failed=()=>$('saveDot').classList.contains('error');
+    while(cloudBusy)await sleep(200);
+    await pushBinder(A.id);let ok=!failed();
+    if(ok){while(cloudBusy)await sleep(200);await pushBinder(B.id);ok=!failed()}
+    if(!ok){
+      restore(A,sA);restore(B,sB);
+      try{while(cloudBusy)await sleep(200);await pushBinder(A.id);await pushBinder(B.id)}catch(e){}
+      say('The trade did not finish and was not logged. Your binders were put back as they were. Reload and check both binders to be sure.');
+      btn.disabled=false;return;
+    }
+    const cr=c=>({id:String(c.id),n:c.name,s:c.setName||'',l:c.localId||'',v:val(c)});
+    const {error}=await supabaseClient.from('family_trades').insert({family_id:signedInUser.id,traded_on:st.date,binder_a_id:A.id,binder_a_name:A.name,binder_b_id:B.id,binder_b_name:B.name,a_gave:outA.map(cr),b_gave:outB.map(cr),note:st.note||null});
+    st.view='done';
+    st.doneMsg='<p class="sub" style="margin-top:0"><strong>Trade complete.</strong> '+outA.length+' card'+(outA.length===1?'':'s')+' moved from '+h(A.name)+' to '+h(B.name)+' and '+outB.length+' card'+(outB.length===1?'':'s')+' from '+h(B.name)+' to '+h(A.name)+'. '+(error?'<span style="color:#ff9b9b">It could not be added to the history: '+h(error.message)+'</span>':'It was added to your trade history.')+'</p>';
+    renderLibrary();renderCollection();
+    if(window.pkbMarket&&window.pkbMarket.refreshUI)window.pkbMarket.refreshUI();
+    render();
+  };
+
+  $('tradeBtn').onclick=()=>{
+    Object.assign(st,{a:binders[0]?binders[0].id:null,b:binders[1]?binders[1].id:null,sel:{a:[],b:[]},view:'build',side:'a',date:todayStr(),note:'',doneMsg:''});
+    render();$('tradeModal').classList.add('open');
+  };
+  $('tradeClose').onclick=closeTrade;
+  $('tradeModal').addEventListener('click',e=>{if(e.target===$('tradeModal'))closeTrade()});
+
+  // History
+  let trades=[];
+  const fmtDate=d=>{const [y,m,dd]=String(d).split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})};
+  const drawHist=()=>{
+    const q=$('histQ').value.trim().toLowerCase();
+    const text=t=>[fmtDate(t.traded_on),t.traded_on,t.binder_a_name,t.binder_b_name,t.note||'',...(t.a_gave||[]).map(c=>c.n),...(t.b_gave||[]).map(c=>c.n)].join(' ').toLowerCase();
+    const list=trades.filter(t=>!q||text(t).includes(q));
+    $('histCount').textContent=list.length+' trade'+(list.length===1?'':'s')+(q?' found':'');
+    const part=(f,t,cards)=>cards.length?'<div style="margin-top:6px"><strong>'+h(f)+' → '+h(t)+'</strong><div class="note">'+cards.map(c=>h(c.n)+(c.l?' #'+h(c.l):'')+(c.s?' ('+h(c.s)+')':'')).join(', ')+'</div></div>':'';
+    $('histList').innerHTML=list.map(t=>'<div class="panel" style="margin-top:10px"><strong>'+h(fmtDate(t.traded_on))+'</strong>'+part(t.binder_a_name,t.binder_b_name,t.a_gave||[])+part(t.binder_b_name,t.binder_a_name,t.b_gave||[])+(t.note?'<div class="note" style="margin-top:6px">Note: '+h(t.note)+'</div>':'')+'</div>').join('');
+  };
+  $('tradeHistBtn').onclick=async()=>{
+    $('histModal').classList.add('open');$('histCount').textContent='Loading…';$('histList').innerHTML='';
+    const {data,error}=await supabaseClient.from('family_trades').select('traded_on,binder_a_name,binder_b_name,a_gave,b_gave,note,created_at').eq('family_id',signedInUser.id).order('traded_on',{ascending:false}).order('created_at',{ascending:false}).limit(1000);
+    if(error){$('histCount').textContent='Could not load history: '+error.message;return}
+    trades=data||[];$('histQ').value='';drawHist();
+  };
+  $('histQ').addEventListener('input',drawHist);
+  const closeHist=()=>$('histModal').classList.remove('open');
+  $('histClose').onclick=closeHist;
+  $('histModal').addEventListener('click',e=>{if(e.target===$('histModal'))closeHist()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeTrade();closeHist()}});
+}catch(err){console.error('Trade patch failed:',err)}
 </script></body></html>
