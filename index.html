@@ -2100,7 +2100,8 @@ try{
   const embed=async src=>{
     const m=await getModel();
     try{
-      const image=await m.T.RawImage.read(src);
+      let image=await m.T.RawImage.read(src);
+      image=await image.crop([Math.round(image.width*.07),Math.round(image.height*.12),Math.round(image.width*.93),Math.round(image.height*.55)]); // artwork area only
       const out=await m.model(await m.processor(image));
       return Float32Array.from(out.image_embeds.normalize().data);
     }catch(e){
@@ -2230,14 +2231,14 @@ try{
       for(const x of withImg){
         if(S.skip)break;
         i++;S.msg='Comparing pictures… '+i+' of '+withImg.length;render();
-        const key='v2:'+MODEL+':'+x.id;let v=await idbGet(key);
+        const key='art1:'+MODEL+':'+x.id;let v=await idbGet(key);
         if(!v){try{v=await embed(imgUrl(x));await idbSet(key,v)}catch(e){continue}}
         x._sim=dot(mine,v);scored.push(x);
       }
       if(!$('scanModal').classList.contains('open'))return; // closed while working
       scored.sort((a,b)=>b._sim-a._sim);
       S.cands=scored.concat(withImg.filter(x=>!scored.includes(x)),noImg);
-      S.card=scored.length?scored[0]:null;S.view=S.card?'confirm':'list';
+      S.card=scored.length?scored[0]:null;S.view='list';
       if(S.card){
         S.note+=(S.note?' ':'')+'Best match by picture ('+Math.round(S.card._sim*100)+'% similar).';
         if(scored.length>1&&scored[0]._sim-scored[1]._sim<0.02)S.note+=' Close call: another print looks almost the same, so check the set and number.';
