@@ -2088,7 +2088,7 @@ try{
   const ownedImage=id=>{const o=owned(id).find(x=>x.c.image);return o?o.c.image:null};
 
   /* ---------- picture model (MobileCLIP in the browser) + saved results ---------- */
-  let M=null,noGpu=false;
+  let M=null,noGpu=true;
   const getModel=async()=>{
     if(M)return M;
     const T=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
@@ -2230,7 +2230,7 @@ try{
       for(const x of withImg){
         if(S.skip)break;
         i++;S.msg='Comparing pictures… '+i+' of '+withImg.length;render();
-        const key=MODEL+':'+x.id;let v=await idbGet(key);
+        const key='v2:'+MODEL+':'+x.id;let v=await idbGet(key);
         if(!v){try{v=await embed(imgUrl(x));await idbSet(key,v)}catch(e){continue}}
         x._sim=dot(mine,v);scored.push(x);
       }
