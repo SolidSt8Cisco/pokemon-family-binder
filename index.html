@@ -2229,13 +2229,15 @@ try{
   const startCam=mode=>{S.mode=mode;cam.value='';cam.click()};
   cam.onchange=()=>{const f=cam.files&&cam.files[0];if(f)run(f)};
 
-  const run=async file=>{
+    const run=async file=>{
     if(S.url)URL.revokeObjectURL(S.url);
-    Object.assign(S,{blob:file,url:URL.createObjectURL(file),busy:true,msg:'Loading the photo…',note:'',done:'',read:null,cands:[],card:null});
+    Object.assign(S,{blob:file,url:URL.createObjectURL(file),busy:true,msg:'Loading the photo…',note:'',done:'',read:null,cands:[],card:null,shots:[],numRaws:[]});
     $('scanModal').classList.add('open');render();
     try{
-      const img=await cropToCard(await loadImg(S.url));
-      if(img.naturalWidth>img.naturalHeight*1.15){S.busy=false;S.note='That photo is sideways. Hold your phone upright with the card filling the screen, then retake it.';render();return}
+      const raw=await loadImg(S.url);
+      S.msg='Finding the card in the photo…';render();
+      const img=await cropToCard(raw);
+      if(img.naturalWidth>img.naturalHeight*1.15){S.busy=false;S.note='That photo is sideways. Hold your phone upright with the card upright on the table, then retake it.';render();return}
       S.msg='Loading the text reader (the first time takes a little while)…';render();
       await getWorker();
       S.msg='Reading the card name…';render();
@@ -2248,7 +2250,7 @@ try{
       const sp=await bestSpecies(nameTxt);
       if(sp)names=[sp,...names.filter(n=>n!==sp)];
       S.read={raw1:nameTxt.trim(),num:nm.num,total:nm.total};
-      if(!names.length){S.busy=false;S.note='I could not read a name from the photo. Try again with the card flat, upright, and filling the frame, or type it below.';render();return}
+      if(!names.length){S.busy=false;S.note='I could not read a name from the photo. Try again, or type it below.';render();return}
       S.msg='Searching TCGdex for “'+names[0]+'”…';render();
       let cands=[];
       for(const q of names){cands=await tcg(q,S.read.num);if(cands.length)break}
