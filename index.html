@@ -1647,13 +1647,21 @@ try{
   // History
   let trades=[];
   const fmtDate=d=>{const [y,m,dd]=String(d).split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})};
+    const valueLine=t=>{
+    const tot=l=>{let s=0,m=0;for(const c of l){if(c.v==null)m++;else s+=Number(c.v)}return {s,m}};
+    const a=t.a_gave||[],b=t.b_gave||[],A=tot(a),B=tot(b),d=A.s-B.s,miss=A.m+B.m;
+    const wrap=x=>'<div class="note" style="margin-top:6px">'+x+'</div>';
+    if(miss>0&&miss===a.length+b.length)return wrap('Value: no prices were available when this trade was made.');
+    const diff=Math.abs(d)<0.005?'Even by value':h(d>0?t.binder_a_name:t.binder_b_name)+' gave '+fmt(Math.abs(d))+' more';
+    return wrap('Value: '+h(t.binder_a_name)+' '+fmt(A.s)+' · '+h(t.binder_b_name)+' '+fmt(B.s)+' · '+diff+(miss?' ('+miss+' card'+(miss===1?'':'s')+' had no price)':''));
+  };
   const drawHist=()=>{
     const q=$('histQ').value.trim().toLowerCase();
     const text=t=>[fmtDate(t.traded_on),t.traded_on,t.binder_a_name,t.binder_b_name,t.note||'',...(t.a_gave||[]).map(c=>c.n),...(t.b_gave||[]).map(c=>c.n)].join(' ').toLowerCase();
     const list=trades.filter(t=>!q||text(t).includes(q));
     $('histCount').textContent=list.length+' trade'+(list.length===1?'':'s')+(q?' found':'');
     const part=(f,t,cards)=>cards.length?'<div style="margin-top:6px"><strong>'+h(f)+' → '+h(t)+'</strong><div class="note">'+cards.map(c=>h(c.n)+(c.l?' #'+h(c.l):'')+(c.s?' ('+h(c.s)+')':'')).join(', ')+'</div></div>':'';
-    $('histList').innerHTML=list.map(t=>'<div class="panel" style="margin-top:10px"><strong>'+h(fmtDate(t.traded_on))+'</strong>'+part(t.binder_a_name,t.binder_b_name,t.a_gave||[])+part(t.binder_b_name,t.binder_a_name,t.b_gave||[])+(t.note?'<div class="note" style="margin-top:6px">Note: '+h(t.note)+'</div>':'')+'</div>').join('');
+    $('histList').innerHTML=list.map(t=>'<div class="panel" style="margin-top:10px"><strong>'+h(fmtDate(t.traded_on))+'</strong>'+part(t.binder_a_name,t.binder_b_name,t.a_gave||[])+part(t.binder_b_name,t.binder_a_name,t.b_gave||[])+valueLine(t)+(t.note?'<div class="note" style="margin-top:6px">Note: '+h(t.note)+'</div>':'')+'</div>').join('');
   };
   $('tradeHistBtn').onclick=async()=>{
     $('histModal').classList.add('open');$('histCount').textContent='Loading…';$('histList').innerHTML='';
