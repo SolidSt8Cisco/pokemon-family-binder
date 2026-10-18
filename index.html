@@ -1517,7 +1517,7 @@ try{
     .observe($('valStatus'),{childList:true,characterData:true,subtree:true});
 }catch(err){console.error('Price sync patch failed:',err)}
 </script><script>
-/* PATCH: trades between your binders + trade history. To undo: delete this whole <script> block. */
+/* PATCH: trades between your binders + trade history (with 48-hour price check). To undo: delete this whole <script> block. */
 try{
   const h=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
@@ -1525,10 +1525,48 @@ try{
   const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
   const bn=id=>binders.find(b=>b.id===id);
   const cmp=(x,y)=>String(x.name||'').localeCompare(String(y.name||''),undefined,{sensitivity:'base'})||String(x.id||'').localeCompare(String(y.id||''));
-  // value of a card: your own value first, then the market price (null = none)
-  const val=c=>{const id=String(c.id),m=window.pkbManual&&window.pkbManual[id];if(m!=null)return m;const mk=window.pkbMarket,g=mk&&mk.getPrice?mk.getPrice(id):null;return g!=null?g:null};
+  const mk=()=>window.pkbMarket||{};
+  const val=c=>{const id=String(c.id),m=window.pkbManual&&window.pkbManual[id];if(m!=null)return m;const g=mk().getPrice?mk().getPrice(id):null;return g!=null?g:null};
   const sum=list=>{let s=0,miss=0;for(const c of list){const v=val(c);if(v==null)miss++;else s+=v}return {s,miss}};
   const loc=(b,c)=>{for(const p of b.pages){const i=p.cards.indexOf(c);if(i>=0)return 'page '+p.pageNumber+', pocket '+(i+1)}return ''};
+
+  // ---- price freshness (48 hours) ----
+  const FRESH=48*3600*1000;
+  const hasManual=c=>!!(window.pkbManual&&window.pkbManual[String(c.id)]!=null);
+  const ageOf=c=>{const e=mk().cache&&mk().cache[String(c.id)];return e?Date.now()-e.t:null};
+  const isStale=c=>{if(!mk().cache||hasManual(c))return false;const a=ageOf(c);return a==null||a>FRESH};
+  const ageText=c=>{if(hasManual(c))return 'your value';const a=ageOf(c);if(a==null)return 'never checked';const hr=Math.round(a/3600000);return hr<1?'updated just now':hr<48?'updated '+hr+'h ago':'updated '+Math.floor(hr/24)+'d ago'};
+  const ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
+  const pickT=full=>{
+    const tp=full&&full.pricing&&full.pricing.tcgplayer;if(!tp)return null;
+    const g=v=>{if(!v||typeof v!=='object')return null;const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);return p!=null&&Number(p)>0?Number(p):null};
+    for(const k of ORDER){const p=g(tp[k]);if(p!=null)return p}
+    for(const k of Object.keys(tp)){const p=g(tp[k]);if(p!=null)return p}
+    return null;
+  };
+  const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const backup=async c=>{ // pokemontcg.io; returns a price or null
+    if(!c||!c.name||!c.localId)return null;
+    try{
+      const num=String(c.localId).replace(/^0+(?=\d)/,'').replace(/"/g,'');
+      const q='name:"'+String(c.name).replace(/"/g,'')+'" number:"'+num+'"';
+      const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),8000);
+      const r=await fetch('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent(q)+'&select=id,name,number,set,tcgplayer',{signal:ctl.signal});
+      clearTimeout(to);if(!r.ok)return null;
+      let list=((await r.json()).data)||[];
+      if(list.length>1&&c.setName){const w=normS(c.setName),m=list.filter(x=>x.set&&normS(x.set.name)===w);if(m.length)list=m}
+      const pick=card=>{const pr=card&&card.tcgplayer&&card.tcgplayer.prices;if(!pr)return null;const g=v=>{const p=v&&(v.market!=null?v.market:v.mid);return p!=null&&Number(p)>0?Number(p):null};for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=g(pr[k]);if(p!=null)return p}for(const k of Object.keys(pr)){const p=g(pr[k]);if(p!=null)return p}return null};
+      const prices=list.map(pick).filter(p=>p!=null);
+      return prices.length&&prices.every(p=>p===prices[0])?prices[0]:null;
+    }catch(e){return null}
+  };
+  const saveManual=async(id,v)=>{
+    const man=window.pkbManual=window.pkbManual||{};
+    if(v==null){delete man[id];const {error}=await supabaseClient.from('family_card_values').delete().eq('family_id',signedInUser.id).eq('card_id',id);return error}
+    man[id]=v;
+    const {error}=await supabaseClient.from('family_card_values').upsert({family_id:signedInUser.id,card_id:id,manual_value:v},{onConflict:'family_id,card_id'});
+    return error;
+  };
 
   document.body.insertAdjacentHTML('beforeend',
    '<div class="modal" id="tradeModal" role="dialog" aria-modal="true" aria-labelledby="tradeTitle"><div class="dialog"><div class="dialoghead"><h2 id="tradeTitle">Trade between binders</h2><button class="close" id="tradeClose" aria-label="Close">×</button></div><div id="tradeBody" style="margin-top:12px"></div></div></div>'+
@@ -1536,9 +1574,11 @@ try{
   $('cartOpenBtn').insertAdjacentHTML('afterend','<button id="tradeBtn" type="button">🔁 Trade</button><button id="tradeHistBtn" type="button">📜 Trade history</button>');
 
   const st={a:null,b:null,sel:{a:[],b:[]},view:'build',side:'a',date:'',note:'',doneMsg:''};
-  let pickAll=[],pickShown=0;
+  let phase=null,pickAll=[],pickShown=0;
   const thumb=c=>'<img src="'+h(String(c.image||'').replace('/high.','/low.'))+'" alt="" loading="lazy" style="width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none" onerror="this.style.visibility=\'hidden\'">';
-  const row=(c,extra)=>{const v=val(c);return '<div class="item" style="cursor:default">'+thumb(c)+'<div class="meta"><strong>'+h(c.name)+'</strong><small>'+h([c.setName,c.localId?'#'+c.localId:c.id].filter(Boolean).join(' · '))+(v!=null?' · '+fmt(v):' · no price')+'</small></div>'+(extra||'')+'</div>'};
+  const sub=c=>h([c.setName,c.localId?'#'+c.localId:c.id].filter(Boolean).join(' · '));
+  const row=(c,extra)=>{const v=val(c);return '<div class="item" style="cursor:default">'+thumb(c)+'<div class="meta"><strong>'+h(c.name)+'</strong><small>'+sub(c)+(v!=null?' · '+fmt(v):' · no price')+'</small></div>'+(extra||'')+'</div>'};
+  const crow=(c,k,i)=>{const v=val(c),bad=v==null||isStale(c);return '<div class="item" style="cursor:default">'+thumb(c)+'<div class="meta"><strong>'+h(c.name)+'</strong><small>'+sub(c)+'<br><span data-age="'+k+':'+i+'" style="color:'+(bad?'#ff8a8a':'inherit')+'">'+(v==null?'no value yet':ageText(c))+'</span></small></div><label class="note" style="margin-left:auto;display:flex;gap:4px;align-items:center">$<input type="number" step="0.01" min="0" class="field" data-val="'+k+':'+i+'" value="'+(v!=null?v:'')+'" placeholder="0.00" style="width:90px;padding:6px"></label></div>'};
   const opts=sel=>binders.map(b=>'<option value="'+h(b.id)+'"'+(b.id===sel?' selected':'')+'>'+h(b.name)+'</option>').join('');
 
   const fair=()=>{
@@ -1570,32 +1610,98 @@ try{
     pickShown=shown.length;pc();
     $('pickList').innerHTML=shown.map(c=>row(c,'<label style="margin-left:auto;display:flex;gap:6px;align-items:center;white-space:nowrap"><span class="note">'+h(loc(b,c))+'</span><input type="checkbox" data-act="tick" data-k="'+k+'" data-i="'+pickAll.indexOf(c)+'"'+(st.sel[k].includes(c)?' checked':'')+' style="width:22px;height:22px"></label>')).join('');
   };
+  const phaseHtml=()=>{
+    const all=st.sel.a.concat(st.sel.b),stale=all.filter(isStale),nov=all.filter(c=>val(c)==null);
+    const box=(t,p,btns)=>'<div class="panel" style="border-color:#ffd34e;margin-top:10px"><strong>'+t+'</strong><p class="note" style="margin:6px 0">'+p+'</p><div class="row" style="justify-content:flex-end">'+btns+'</div></div>';
+    if(phase==='ask')return box('Prices may be out of date',stale.length+' of '+all.length+' cards have not had a market price update in the last 48 hours (or were never checked). Update them now from TCGdex and pokemontcg.io, or type your own values in the boxes above.','<button type="button" data-act="noask">Let me edit values</button><button type="button" data-act="cont">Continue without updating</button><button type="button" class="primary" data-act="upd" style="width:auto;padding:10px 18px">Update prices now</button>');
+    if(phase==='novalue')return box(nov.length+' card'+(nov.length===1?' has':'s have')+' no value','They count as $0 in the history and the fairness bar. Type a value in the box next to each one, or complete the trade anyway.','<button type="button" data-act="noask">Let me add values</button><button type="button" class="primary" data-act="force" style="width:auto;padding:10px 18px">Complete anyway</button>');
+    if(phase==='updating')return '';
+    return '<div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" data-act="back">Back</button><button type="button" class="primary" data-act="go" style="width:auto;padding:10px 18px">Complete trade</button></div>';
+  };
   const confirmHtml=()=>{
     const A=bn(st.a),B=bn(st.b);
-    const part=(f,t,list)=>{const s=sum(list);return '<div class="panel" style="margin-bottom:10px"><strong>'+h(f.name)+' → '+h(t.name)+'</strong><div class="note">'+(list.length?list.length+' card'+(list.length===1?'':'s')+' · '+fmt(s.s):'No cards')+'</div><div class="list" style="grid-template-columns:1fr">'+list.map(c=>row(c)).join('')+'</div></div>'};
-    return part(A,B,st.sel.a)+part(B,A,st.sel.b)+fair()+
-      '<div class="row"><label class="note" for="tDate">Date of trade</label><input id="tDate" type="date" class="field" style="width:auto" value="'+h(st.date)+'"></div><input id="tNote" class="field" style="margin-top:8px" maxlength="200" placeholder="Note (optional)" value="'+h(st.note)+'"><p id="tMsg" class="status" aria-live="polite"></p>'+
-      '<div class="row" style="justify-content:flex-end"><button type="button" data-act="back">Back</button><button type="button" class="primary" data-act="go" style="width:auto;padding:10px 18px">Complete trade</button></div>';
+    const part=(f,t,list,k)=>{const s=sum(list);return '<div class="panel" style="margin-bottom:10px"><strong>'+h(f.name)+' → '+h(t.name)+'</strong><div class="note">'+(list.length?list.length+' card'+(list.length===1?'':'s')+' · '+fmt(s.s):'No cards')+'</div><div class="list" style="grid-template-columns:1fr">'+list.map((c,i)=>crow(c,k,i)).join('')+'</div></div>'};
+    return part(A,B,st.sel.a,'a')+part(B,A,st.sel.b,'b')+'<p class="note" style="margin:0 0 4px">Tip: type a value in any box to correct it. It is saved as your own value for that card.</p><div id="fairBox">'+fair()+'</div>'+
+      '<div class="row"><label class="note" for="tDate">Date of trade</label><input id="tDate" type="date" class="field" style="width:auto" value="'+h(st.date)+'"></div><input id="tNote" class="field" style="margin-top:8px" maxlength="200" placeholder="Note (optional)" value="'+h(st.note)+'"><p id="tMsg" class="status" aria-live="polite"></p>'+phaseHtml();
   };
   const render=()=>{
     $('tradeBody').innerHTML=st.view==='pick'?pickHtml():st.view==='confirm'?confirmHtml():st.view==='done'?st.doneMsg+'<div class="row" style="justify-content:flex-end"><button type="button" class="primary" data-act="close" style="width:auto;padding:10px 18px">Close</button></div>':buildHtml();
     if(st.view==='pick')pickList();
   };
   const closeTrade=()=>$('tradeModal').classList.remove('open');
+  const say=t=>{const m=$('tMsg');if(m)m.textContent=t};
+
+  // Update every out-of-date card in the trade, then show the result so values can be fixed by hand
+  const updateStale=async()=>{
+    phase='updating';render();
+    const cache=mk().cache;if(!cache){phase=null;render();say('Price updating is not available.');return}
+    const info={},ids=[];
+    for(const c of st.sel.a.concat(st.sel.b)){const id=String(c.id);if(isStale(c)&&!info[id]){info[id]=c;ids.push(id)}}
+    const todo=ids.slice();let n=0;
+    const worker=async()=>{
+      while(todo.length){
+        const id=todo.shift();
+        try{
+          const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id));
+          if(r.ok)cache[id]={p:pickT(await r.json()),t:Date.now(),fb:0};
+          else if(r.status===404)cache[id]={p:null,t:Date.now(),fb:0};
+        }catch(e){}
+        n++;say('Checking TCGdex… '+n+' of '+ids.length);
+      }
+    };
+    await Promise.all([worker(),worker(),worker()]);
+    const miss=ids.filter(id=>cache[id]&&cache[id].p==null);let j=0;
+    for(const id of miss){
+      j++;say('Checking pokemontcg.io… '+j+' of '+miss.length);
+      const p=await backup(info[id]);
+      if(p!=null)cache[id]={p,t:Date.now(),fb:1};
+      await sleep(2200);
+    }
+    if(mk().saveCache)mk().saveCache();
+    if(mk().refreshUI)mk().refreshUI();
+    phase=null;render();
+    const left=st.sel.a.concat(st.sel.b).filter(c=>val(c)==null).length;
+    say('Prices updated.'+(left?' '+left+' card'+(left===1?' has':'s have')+' no price. Type a value for '+(left===1?'it':'them')+', or complete the trade anyway.':''));
+  };
+  const preflight=()=>{
+    const all=st.sel.a.concat(st.sel.b);
+    if(all.some(isStale)){phase='ask';render();return}
+    if(all.some(c=>val(c)==null)){phase='novalue';render();return}
+    complete();
+  };
 
   $('tradeBody').addEventListener('click',e=>{
     const el=e.target.closest('[data-act]');if(!el)return;
     const act=el.dataset.act,k=el.dataset.k;
+    if(st.view==='confirm'&&$('tDate')){st.date=$('tDate').value||st.date;st.note=$('tNote').value}
     if(act==='rm'){st.sel[k].splice(+el.dataset.i,1);render()}
     else if(act==='pick'){st.side=k;st.view='pick';render()}
     else if(act==='done'){st.view='build';render()}
     else if(act==='tick'){const c=pickAll[+el.dataset.i],l=st.sel[k],i=l.indexOf(c);if(el.checked){if(i<0)l.push(c)}else if(i>=0)l.splice(i,1);pc()}
-    else if(act==='review'){st.view='confirm';render()}
-    else if(act==='back'){st.date=$('tDate').value;st.note=$('tNote').value;st.view='build';render()}
+    else if(act==='review'){phase=null;st.view='confirm';render()}
+    else if(act==='back'){phase=null;st.view='build';render()}
     else if(act==='close')closeTrade();
-    else if(act==='go')complete();
+    else if(act==='go')preflight();
+    else if(act==='noask'){phase=null;render()}
+    else if(act==='upd')updateStale();
+    else if(act==='cont'){if(st.sel.a.concat(st.sel.b).some(c=>val(c)==null)){phase='novalue';render()}else complete()}
+    else if(act==='force')complete();
   });
-  $('tradeBody').addEventListener('change',e=>{const k=e.target.dataset.sel;if(k){st[k]=e.target.value;st.sel[k]=[];render()}});
+  $('tradeBody').addEventListener('change',async e=>{
+    const t=e.target;
+    if(t.dataset.sel){st[t.dataset.sel]=t.value;st.sel[t.dataset.sel]=[];render();return}
+    if(t.dataset.val){
+      const [k,i]=t.dataset.val.split(':'),c=st.sel[k][+i];if(!c)return;
+      const raw=t.value.trim(),v=raw===''?null:Number(raw);
+      if(v!==null&&(isNaN(v)||v<0)){say('Enter 0 or more.');return}
+      const err=await saveManual(String(c.id),v);
+      if(mk().refreshUI)mk().refreshUI();
+      const fb=$('fairBox');if(fb)fb.innerHTML=fair();
+      const sp=document.querySelector('[data-age="'+k+':'+i+'"]');
+      if(sp){sp.textContent=val(c)==null?'no value yet':ageText(c);sp.style.color=(val(c)==null||isStale(c))?'#ff8a8a':'inherit'}
+      say(err?'Could not save that value: '+err.message:'');
+    }
+  });
   $('tradeBody').addEventListener('input',e=>{if(e.target.id==='pickQ')pickList()});
 
   // Move the cards, save both binders, then write the history row
@@ -1608,12 +1714,11 @@ try{
     b.pages=b.pages.slice(0,need);
     b.pages.forEach((p,pi)=>{p.cards=blankCards();for(let i=0;i<9;i++)p.cards[i]=keep[pi*9+i]||null});
   };
+  const lock=v=>document.querySelectorAll('#tradeBody button').forEach(b=>b.disabled=v);
   const complete=async()=>{
     const A=bn(st.a),B=bn(st.b);if(!A||!B||A===B)return;
     st.date=$('tDate').value||todayStr();st.note=$('tNote').value.trim();
-    const btn=document.querySelector('#tradeBody [data-act="go"]');btn.disabled=true;
-    const say=t=>{const m=$('tMsg');if(m)m.textContent=t};
-    say('Moving cards and saving…');
+    lock(true);say('Moving cards and saving…');
     const sA=snap(A),sB=snap(B),outA=st.sel.a.slice(),outB=st.sel.b.slice();
     const keepA=A.pages.flatMap(p=>p.cards.filter(c=>c&&!outA.includes(c))).concat(outB);
     const keepB=B.pages.flatMap(p=>p.cards.filter(c=>c&&!outB.includes(c))).concat(outA);
@@ -1626,28 +1731,29 @@ try{
       restore(A,sA);restore(B,sB);
       try{while(cloudBusy)await sleep(200);await pushBinder(A.id);await pushBinder(B.id)}catch(e){}
       say('The trade did not finish and was not logged. Your binders were put back as they were. Reload and check both binders to be sure.');
-      btn.disabled=false;return;
+      lock(false);return;
     }
     const cr=c=>({id:String(c.id),n:c.name,s:c.setName||'',l:c.localId||'',v:val(c)});
     const {error}=await supabaseClient.from('family_trades').insert({family_id:signedInUser.id,traded_on:st.date,binder_a_id:A.id,binder_a_name:A.name,binder_b_id:B.id,binder_b_name:B.name,a_gave:outA.map(cr),b_gave:outB.map(cr),note:st.note||null});
-    st.view='done';
+    phase=null;st.view='done';
     st.doneMsg='<p class="sub" style="margin-top:0"><strong>Trade complete.</strong> '+outA.length+' card'+(outA.length===1?'':'s')+' moved from '+h(A.name)+' to '+h(B.name)+' and '+outB.length+' card'+(outB.length===1?'':'s')+' from '+h(B.name)+' to '+h(A.name)+'. '+(error?'<span style="color:#ff9b9b">It could not be added to the history: '+h(error.message)+'</span>':'It was added to your trade history.')+'</p>';
     renderLibrary();renderCollection();
-    if(window.pkbMarket&&window.pkbMarket.refreshUI)window.pkbMarket.refreshUI();
+    if(mk().refreshUI)mk().refreshUI();
     render();
   };
 
   $('tradeBtn').onclick=()=>{
+    phase=null;
     Object.assign(st,{a:binders[0]?binders[0].id:null,b:binders[1]?binders[1].id:null,sel:{a:[],b:[]},view:'build',side:'a',date:todayStr(),note:'',doneMsg:''});
     render();$('tradeModal').classList.add('open');
   };
   $('tradeClose').onclick=closeTrade;
   $('tradeModal').addEventListener('click',e=>{if(e.target===$('tradeModal'))closeTrade()});
 
-  // History
+  // ---- History ----
   let trades=[];
   const fmtDate=d=>{const [y,m,dd]=String(d).split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})};
-    const valueLine=t=>{
+  const valueLine=t=>{
     const tot=l=>{let s=0,m=0;for(const c of l){if(c.v==null)m++;else s+=Number(c.v)}return {s,m}};
     const a=t.a_gave||[],b=t.b_gave||[],A=tot(a),B=tot(b),d=A.s-B.s,miss=A.m+B.m;
     const wrap=x=>'<div class="note" style="margin-top:6px">'+x+'</div>';
