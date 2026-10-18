@@ -1887,4 +1887,38 @@ try{
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);loadOwners()};
 }catch(err){console.error('Owner balance patch failed:',err)}
+</script><script>
+/* PATCH: type * in "Search all my cards" to list every card you own more than once. To undo: delete this whole <script> block. */
+try{
+  const showDupes=()=>{
+    const map=new Map();
+    for(const b of binders)for(const p of b.pages)for(const c of p.cards){
+      if(!c||!c.id)continue;
+      const id=String(c.id),e=map.get(id)||{card:c,total:0,by:{}};
+      e.total++;e.by[b.name]=(e.by[b.name]||0)+1;map.set(id,e);
+    }
+    const list=[...map.values()].filter(e=>e.total>1).sort((a,b)=>b.total-a.total||a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
+    const copies=list.reduce((n,e)=>n+e.total,0);
+    setStatus('collCount',list.length?list.length+' card'+(list.length===1?'':'s')+' you own more than once ('+copies+' copies in total)':'No duplicates found. Every card is in your binders only once.');
+    const el=$('collList');el.innerHTML='';
+    for(const e of list){
+      const row=document.createElement('button');row.type='button';row.className='item';
+      const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=String(e.card.image||'').replace('/high.','/low.');
+      img.onerror=()=>{img.style.visibility='hidden'};
+      const meta=document.createElement('div');meta.className='meta';
+      const n=document.createElement('strong');n.textContent=e.card.name;
+      const s=document.createElement('small');
+      s.textContent=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+Object.entries(e.by).map(([k,v])=>k+(v>1?' ×'+v:'')).join(', ');
+      meta.append(n,s);
+      const bd=document.createElement('span');bd.className='badge';bd.textContent='×'+e.total;
+      row.append(img,meta,bd);
+      row.onclick=()=>openCardModal(e.card);
+      el.append(row);
+    }
+  };
+  const isStar=()=>$('collQuery').value.trim()==='*';
+  $('collQuery').addEventListener('input',()=>{if(isStar())showDupes()});
+  const origRC=renderCollection;
+  renderCollection=function(){if(isStar())showDupes();else origRC.apply(this,arguments)};
+}catch(err){console.error('Duplicate search patch failed:',err)}
 </script></body></html>
