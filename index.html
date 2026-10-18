@@ -1921,4 +1921,77 @@ try{
   const origRC=renderCollection;
   renderCollection=function(){if(isStar())showDupes();else origRC.apply(this,arguments)};
 }catch(err){console.error('Duplicate search patch failed:',err)}
+</script><script>
+/* PATCH: edit values right inside the "cards without a price" list. Needs the no-price flag patch and the manual value patch. To undo: delete this whole <script> block. */
+try{
+  const needs=id=>{
+    if(window.pkbManual&&window.pkbManual[id]!=null)return false;
+    const mk=window.pkbMarket;
+    return !!(mk&&mk.getPrice&&mk.getPrice(id)===null);
+  };
+  const collect=()=>{
+    const map=new Map();
+    for(const b of binders)for(const pg of b.pages)for(const c of pg.cards){
+      if(!c||!c.id)continue;
+      const id=String(c.id);if(!needs(id))continue;
+      const e=map.get(id)||{card:c,copies:0,where:b.name+', page '+pg.pageNumber};
+      e.copies++;map.set(id,e);
+    }
+    return [...map.values()].sort((a,b)=>a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
+  };
+  const saveVal=async(id,v)=>{
+    const man=window.pkbManual=window.pkbManual||{};
+    if(v==null){delete man[id];const {error}=await supabaseClient.from('family_card_values').delete().eq('family_id',signedInUser.id).eq('card_id',id);return error}
+    man[id]=v;
+    const {error}=await supabaseClient.from('family_card_values').upsert({family_id:signedInUser.id,card_id:id,manual_value:v},{onConflict:'family_id,card_id'});
+    return error;
+  };
+
+  $('noPriceBtn').onclick=()=>{
+    const items=collect(),list=$('noPriceList');list.innerHTML='';
+    const upd=()=>{
+      const n=[...list.querySelectorAll('input')].filter(i=>i.value.trim()==='').length;
+      $('noPriceSub').textContent=!items.length?'Every card has a value.':n?n+' still need a value. Type one next to each card. It saves as you go.':'All done. Every card in this list has a value now.';
+    };
+    for(const e of items){
+      const id=String(e.card.id);
+      const row=document.createElement('div');row.className='item';row.style.cursor='default';
+      const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=String(e.card.image||'').replace('/high.','/low.');
+      img.onerror=()=>{img.style.visibility='hidden'};
+      const meta=document.createElement('div');meta.className='meta';
+      const n=document.createElement('strong');n.textContent=e.card.name;
+      const s=document.createElement('small');
+      s.textContent=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+e.where+(e.copies>1?' · '+e.copies+' copies':'');
+      meta.append(n,s);
+      const right=document.createElement('div');right.style.cssText='margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px';
+      const box=document.createElement('span');box.className='note';box.style.cssText='display:flex;gap:4px;align-items:center';box.append('$');
+      const inp=document.createElement('input');
+      inp.type='number';inp.step='0.01';inp.min='0';inp.inputMode='decimal';inp.placeholder='0.00';inp.className='field';
+      inp.style.cssText='width:90px;padding:6px';inp.setAttribute('aria-label','Value for '+e.card.name);
+      const msg=document.createElement('small');msg.style.minHeight='1em';
+      box.append(inp);right.append(box,msg);row.append(img,meta,right);list.append(row);
+      inp.addEventListener('change',async()=>{
+        const raw=inp.value.trim(),v=raw===''?null:Number(raw);
+        if(v!==null&&(isNaN(v)||v<0)){msg.textContent='Enter 0 or more';msg.style.color='#ff8a8a';return}
+        msg.textContent='Saving…';msg.style.color='';
+        const err=await saveVal(id,v);
+        if(err){msg.textContent='Not saved: '+err.message;msg.style.color='#ff8a8a';return}
+        msg.textContent=v==null?'Cleared':'Saved ✓';msg.style.color=v==null?'':'#7ddf9b';
+        if(window.pkbMarket&&window.pkbMarket.refreshUI)window.pkbMarket.refreshUI();
+        upd();
+      });
+      inp.addEventListener('keydown',ev=>{
+        if(ev.key!=='Enter')return;
+        ev.preventDefault();
+        const all=[...list.querySelectorAll('input')],i=all.indexOf(inp);
+        if(all[i+1])all[i+1].focus();else inp.blur();
+      });
+      // tapping the card name still opens its pop-up
+      meta.style.cursor='pointer';
+      meta.onclick=()=>{$('noPriceModal').classList.remove('open');openCardModal(e.card)};
+    }
+    upd();
+    $('noPriceModal').classList.add('open');
+  };
+}catch(err){console.error('No-price editing patch failed:',err)}
 </script></body></html>
