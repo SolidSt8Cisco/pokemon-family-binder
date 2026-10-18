@@ -2106,7 +2106,7 @@ try{
   document.body.insertAdjacentHTML('beforeend','<div class="modal" id="scanModal" role="dialog" aria-modal="true" aria-labelledby="scanTitle"><div class="dialog"><div class="dialoghead"><h2 id="scanTitle">Scan a card</h2><button class="close" id="scanClose" aria-label="Close">×</button></div><div id="scanBody" style="margin-top:12px"></div></div></div>');
   const closeScan=()=>{$('scanModal').classList.remove('open');if(S.url){URL.revokeObjectURL(S.url);S.url=''}};
   const photo=()=>S.url?'<img src="'+S.url+'" alt="Your photo" style="display:block;margin:0 auto 10px;max-height:160px;max-width:100%;border-radius:8px">':'';
-  const readLine=()=>S.read?'<p class="note">I read: “'+h(S.read.raw1.replace(/\s+/g,' ').slice(0,60))+'”'+(S.read.num?' · '+h(S.read.num+(S.read.total?'/'+S.read.total:'')):' · no card number')+'</p>':'';
+    const readLine=()=>S.read?'<p class="note">I read: “'+h(S.read.raw1.replace(/\s+/g,' ').slice(0,60))+'”'+(S.read.num?' · '+h(S.read.num+(S.read.total?'/'+S.read.total:'')):' · no card number')+'</p>'+(S.shots&&S.shots.length?'<div class="note">What I looked at:</div>'+S.shots.map(s=>'<img src="'+s+'" alt="" style="display:block;width:100%;max-height:48px;object-fit:contain;margin:2px 0;background:#000;border-radius:4px">').join(''):''):'';
   const form='<form id="scanForm" class="searchrow"><input id="scanQ" class="field" placeholder="Type name and number, like Pikachu #104" autocomplete="off" required><button type="submit">Search</button></form>';
   const sub=c=>h([c.set&&c.set.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id);
   const pic=c=>c.image?'<img src="'+h(c.image.replace(/\/(high|low)\.(webp|png|jpg)$/i,'')+'/low.webp')+'" alt="" style="width:100%;max-height:300px;object-fit:contain;border-radius:8px;background:#111a26">':'<div class="note" style="padding:30px 6px">TCGdex has no picture for this card</div>';
@@ -2135,6 +2135,48 @@ try{
     $('scanBody').innerHTML=html;
   };
 
+    /* ---------- better reading: bigger number crops + Pokémon-name correction ---------- */
+  const crop2=(img,x0,y0,x1,y1,filter,outW)=>{
+    const w=img.naturalWidth,hh=img.naturalHeight,sx=w*x0,sy=hh*y0,sw=w*(x1-x0),sh=hh*(y1-y0);
+    const cv=document.createElement('canvas');cv.width=outW;cv.height=Math.max(40,Math.round(sh*outW/sw));
+    const g=cv.getContext('2d');g.filter=filter||'none';g.drawImage(img,sx,sy,sw,sh,0,0,cv.width,cv.height);
+    return cv;
+  };
+  const readNumber=async img=>{
+    const shots=[];
+    const tries=[[.03,.925,.50,.99,'grayscale(1) contrast(1.6)'],[.03,.925,.50,.99,'grayscale(1) invert(1) contrast(1.6)'],[.50,.925,.97,.99,'grayscale(1) contrast(1.6)'],[.50,.925,.97,.99,'grayscale(1) invert(1) contrast(1.6)']];
+    for(const [x0,y0,x1,y1,f] of tries){
+      const cv=crop2(img,x0,y0,x1,y1,f,1800);
+      shots.push(cv.toDataURL('image/jpeg',.5));
+      const txt=await ocr(cv,'6','0123456789/');
+      const m=txt.match(/(\d{1,3})\s*\/\s*(\d{2,3})/);
+      if(m)return {num:m[1],total:m[2],shots};
+    }
+    return {num:null,total:null,shots};
+  };
+  let species=null;
+  const loadSpecies=async()=>{
+    if(species)return species;
+    try{const c=JSON.parse(localStorage.getItem('pkb_species_v1')||'null');if(Array.isArray(c)&&c.length>500)return species=c}catch(e){}
+    try{
+      const r=await fetch('https://pokeapi.co/api/v2/pokemon-species?limit=2000');
+      if(r.ok){const d=await r.json();species=(d.results||[]).map(x=>x.name);try{localStorage.setItem('pkb_species_v1',JSON.stringify(species))}catch(e){}}
+    }catch(e){}
+    return species||[];
+  };
+  const lev=(a,b)=>{const m=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let p=m[0];m[0]=i;for(let j=1;j<=b.length;j++){const t=m[j];m[j]=Math.min(m[j]+1,m[j-1]+1,p+(a[i-1]===b[j-1]?0:1));p=t}}return m[b.length]};
+  const bestSpecies=async txt=>{
+    const list=await loadSpecies();if(!list.length)return null;
+    const toks=[...new Set(String(txt).toLowerCase().replace(/[^a-z\s]/g,' ').split(/\s+/).filter(t=>t.length>=3))];
+    let best=null;
+    for(const t of toks)for(const sp of list){
+      const k=sp.replace(/[^a-z]/g,''),limit=t.length<5?0:t.length<8?1:2;
+      let d=lev(t,k);
+      if(t.length>=7&&k.length>=5&&t.startsWith(k))d=Math.min(d,1);
+      if(d<=limit&&(!best||d<best.d||(d===best.d&&k.length>best.k.length)))best={d,k,sp};
+    }
+    return best?best.sp.split('-').sort((a,b)=>b.length-a.length)[0]:null;
+  };
   /* ---------- the scan itself ---------- */
   const cam=document.createElement('input');cam.type='file';cam.accept='image/*';cam.setAttribute('capture','environment');cam.className='hidden';document.body.append(cam);
   const startCam=mode=>{S.mode=mode;cam.value='';cam.click()};
@@ -2150,11 +2192,15 @@ try{
       S.msg='Loading the text reader (the first time takes a little while)…';render();
       await getWorker();
       S.msg='Reading the card name…';render();
-      const nameTxt=await ocr(crop(img,.05,.025,.76,.125),'6','');
+      const nameCv=crop(img,.04,.02,.80,.13);
+      const nameTxt=await ocr(nameCv,'6','');
       S.msg='Reading the card number…';render();
-      const numTxt=await ocr(crop(img,.02,.915,.98,.99),'11','0123456789/ ABCDEFGHIJKLMNOPQRSTUVWXYZ');
-      const names=nameCands(nameTxt),nm=numFrom(numTxt);
-      S.read={raw1:nameTxt.trim(),num:nm?nm.num:null,total:nm?nm.total:null};
+      const nm=await readNumber(img);
+      S.shots=[nameCv.toDataURL('image/jpeg',.5),...nm.shots];
+      let names=nameCands(nameTxt);
+      const sp=await bestSpecies(nameTxt);
+      if(sp)names=[sp,...names.filter(n=>n!==sp)];
+      S.read={raw1:nameTxt.trim(),num:nm.num,total:nm.total};
       if(!names.length){S.busy=false;S.note='I could not read a name from the photo. Try again with the card flat, upright, and filling the frame, or type it below.';render();return}
       S.msg='Searching TCGdex for “'+names[0]+'”…';render();
       let cands=[];
