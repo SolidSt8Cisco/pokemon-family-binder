@@ -84,7 +84,7 @@
 <div id="cartGroups"></div>
 <p id="cartStatus" class="status" aria-live="polite"></p>
 </section>
-<section id="binderView" class="hidden"><div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="backBtn" type="button" class="icon-row-btn">← All binders</button><div class="row icon-row"><button id="renameBtn" type="button" class="icon-row-btn" aria-label="Rename" title="Rename"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button><button id="coverBtn" type="button" class="icon-row-btn" aria-label="Change picture" title="Change picture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button><input id="coverFile" type="file" accept="image/*" class="hidden"></div></div><div class="row" style="gap:12px;align-items:center"><img id="activeCover" class="cover-preview hidden" alt="Binder cover"><div class="grow"><div class="row" style="gap:8px;align-items:center"><h2 id="activeBinderName">Binder</h2><span id="saveDot" class="save-dot" aria-label="Save status" title="Saved"></span></div></div></div>
+<section id="binderView" class="hidden"><div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="backBtn" type="button" class="icon-row-btn">← All binders</button><div class="row icon-row"><button id="renameBtn" type="button" class="icon-row-btn" aria-label="Rename" title="Rename"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button><button id="coverBtn" type="button" class="icon-row-btn" aria-label="Change picture" title="Change picture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button><input id="coverFile" type="file" accept="image/*" class="hidden"></div></div><div class="row" style="gap:12px;align-items:center"><img id="activeCover" class="cover-preview hidden" alt="Binder cover"><div class="grow"><div class="row" style="gap:8px;align-items:center"><h2 id="activeBinderName">Binder</h2><span id="saveDot" class="save-dot" aria-label="Save status" title="Saved"></span><button id="binderRefreshBtn" type="button" style="padding:4px 10px;font-size:.8rem">Refresh prices</button></div></div></div>
 <div class="panel" style="margin-top:12px"><form id="inlineSearchForm" class="searchrow" style="margin:0"><input id="inlineQuery" class="field" type="search" placeholder="Search by Pokémon or card name…" autocomplete="off"><button type="submit">Search</button></form><p id="inlineSearchStatus" class="status" aria-live="polite"></p><div id="inlineResults" class="results"></div></div>
 <div class="pagebar"><div class="group"><button id="prevPageBtn" type="button">← Previous</button><button id="nextPageBtn" type="button">Next →</button></div><strong id="pageLabel">Page 1 of 1</strong></div><section class="grid" id="cardGrid" aria-label="Nine card binder slots"></section><p id="binderStatus" class="status" aria-live="polite"></p></section>
 <div class="row" style="justify-content:center;gap:10px;margin-top:32px;padding-top:16px;border-top:1px solid var(--line)"><button id="exportBtn" type="button">Export backup</button><button id="importBtn" type="button">Import backup</button><input id="importFile" type="file" accept=".json,application/json" class="hidden"><button id="signOutBtn" type="button" class="hidden">Sign out</button></div>
@@ -1268,7 +1268,7 @@ try{
     const ids=[...new Set(binders.flatMap(b=>allCards(b).map(c=>String(c.id))))];
     for(const b of binders)for(const c of allCards(b))info[String(c.id)]=c;
     const now=Date.now();
-    const todo=ids.filter(id=>force||!cache[id]||now-cache[id].t>TTL||(cache[id].p==null&&!cache[id].fb));
+const todo=ids.filter(id=>force||!cache[id]);
     refreshUI();
     if(!todo.length){setStatus('valStatus','');return}
     running=true;$('valRefreshBtn').disabled=true;
@@ -1296,12 +1296,11 @@ try{
     setStatus('valStatus','Prices updated.');
   };
   $('valRefreshBtn').onclick=()=>refreshPrices(true);
+  $('binderRefreshBtn').onclick=()=>refreshPrices(true);
 
   // Hook into the existing screens
   const origRL=renderLibrary;
   renderLibrary=function(){origRL.apply(this,arguments);decorate();if(typeof updatePanel==='function')updatePanel()};
-  const origSL=showLibrary;
-  showLibrary=function(){origSL.apply(this,arguments);refreshPrices(false)};
 
   // Market value line in the card pop-up
   $('cardModalMeta').insertAdjacentHTML('afterend','<p id="marketLine" class="note" style="margin-top:6px"></p>');
