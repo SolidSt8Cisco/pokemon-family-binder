@@ -2353,4 +2353,94 @@ try{
   $('inlineQuery').insertAdjacentElement('afterend',mkBtn('binder'));
   $('cartQuery').insertAdjacentElement('afterend',mkBtn('cart'));
 }catch(err){console.error('Card scan patch failed:',err)}
+</script><script>
+/* PATCH: gold badge on cards that have a manual "Market Value". To undo: delete this whole <script> block. */
+try{
+  const hasManual=id=>!!(window.pkbManual&&window.pkbManual[String(id)]!=null);
+
+  // Badge on cards in the 3x3 binder view
+  const badges=()=>{
+    const p=currentPage();if(!p)return;
+    document.querySelectorAll('#cardGrid .slot').forEach((slot,i)=>{
+      const old=slot.querySelector('.manualBadge');if(old)old.remove();
+      const c=p.cards[i];
+      if(c&&c.id&&hasManual(c.id)){
+        const b=document.createElement('span');
+        b.className='manualBadge';b.textContent='$';
+        b.title='You set your own market value for this card.';
+        b.style.cssText='position:absolute;top:5px;left:5px;width:20px;height:20px;border-radius:50%;background:#ffd34e;color:#101722;font:700 13px/20px system-ui,sans-serif;text-align:center;z-index:2;box-shadow:0 1px 3px #000a;pointer-events:none';
+        slot.append(b);
+      }
+    });
+  };
+  const origRC=renderCards;
+  renderCards=function(){origRC.apply(this,arguments);badges()};
+
+  // A button + modal that lists them all, next to "Show cards without a price"
+  const haveBtn=$('noPriceBtn');
+  if(haveBtn){
+    haveBtn.insertAdjacentHTML('afterend','<button id="manualValueBtn" type="button" class="hidden" style="margin-top:8px;margin-left:8px;border-color:#ffd34e">💰 Show cards with your own value</button>');
+    document.body.insertAdjacentHTML('beforeend','<div class="modal" id="manualValueModal" role="dialog" aria-modal="true" aria-labelledby="manualValueTitle"><div class="dialog"><div class="dialoghead"><h2 id="manualValueTitle">Cards with your own value</h2><button class="close" id="manualValueClose" aria-label="Close">×</button></div><p class="sub" id="manualValueSub"></p><div id="manualValueList" class="list"></div></div></div>');
+  }
+
+  // Gather every card that has a manual value, de-duplicated by card id
+  const manualCards=()=>{
+    const map=new Map();
+    for(const b of binders)for(const pg of b.pages)for(const c of pg.cards){
+      if(!c||!c.id)continue;
+      const id=String(c.id);if(!hasManual(id))continue;
+      const e=map.get(id)||{card:c,copies:0,where:b.name+', page '+pg.pageNumber,value:window.pkbManual[id]};
+      e.copies++;map.set(id,e);
+    }
+    return [...map.values()].sort((a,b)=>a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
+  };
+  const fmtUSD=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+  const refreshButton=()=>{
+    const btn=$('manualValueBtn');if(!btn)return;
+    const n=manualCards().length;
+    btn.classList.toggle('hidden',n===0);
+    btn.textContent='💰 Show cards with your own value ('+n+')';
+  };
+
+  // List modal
+  const closeList=()=>$('manualValueModal').classList.remove('open');
+  if(haveBtn){
+    $('manualValueBtn').onclick=()=>{
+      const items=manualCards(),list=$('manualValueList');list.innerHTML='';
+      $('manualValueSub').textContent=items.length?'These cards use your own value instead of the market price.':'You have not set your own value on any card yet.';
+      for(const e of items){
+        const row=document.createElement('button');row.type='button';row.className='item';
+        const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=String(e.card.image||'').replace('/high.','/low.');
+        img.onerror=()=>{img.style.visibility='hidden'};
+        const meta=document.createElement('div');meta.className='meta';
+        const n=document.createElement('strong');n.textContent=e.card.name;
+        const s=document.createElement('small');
+        s.textContent=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+e.where+(e.copies>1?' · '+e.copies+' copies':'');
+        meta.append(n,s);
+        const badge=document.createElement('span');badge.className='badge';badge.textContent=fmtUSD(e.value);
+        row.append(img,meta,badge);
+        row.onclick=()=>{closeList();openCardModal(e.card)};
+        list.append(row);
+      }
+      $('manualValueModal').classList.add('open');
+    };
+    $('manualValueClose').onclick=closeList;
+    $('manualValueModal').addEventListener('click',e=>{if(e.target===$('manualValueModal'))closeList()});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeList()});
+  }
+
+  // Keep badges + button in sync whenever prices/values refresh
+  const refreshAll=()=>{badges();refreshButton()};
+  if(window.pkbMarket&&window.pkbMarket.refreshUI){
+    const origUI=window.pkbMarket.refreshUI;
+    window.pkbMarket.refreshUI=function(){origUI.apply(this,arguments);refreshAll()};
+  }
+  // And whenever you save a manual value in the lightbox (the manual patch sets window.pkbManual)
+  const origOpen=openCardModal;
+  openCardModal=function(card){origOpen.apply(this,arguments);refreshAll()};
+  const origRL=renderLibrary;
+  renderLibrary=function(){origRL.apply(this,arguments);refreshButton()};
+  const origSL=showLibrary;
+  showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
+}catch(err){console.error('Manual value badge patch failed:',err)}
 </script></body></html>
