@@ -2159,6 +2159,7 @@ try{
   };
 
   // Gather distinct cards in binders whose cached price is null (finished, no price)
+  // AND that do NOT have a manual value. Manual-valued cards are never retried.
   const cardInfoById={};
   const nullPriceIds=()=>{
     const ids=[];
@@ -2166,12 +2167,12 @@ try{
       if(!c||!c.id)continue;
       const id=String(c.id);
       cardInfoById[id]=c;
+      if(window.pkbManual&&window.pkbManual[id]!=null)continue; // manual value set → leave it alone
       const hit=mk.cache[id];
       if(hit&&hit.p==null&&!ids.includes(id))ids.push(id);
     }
     return ids;
   };
-
   // Add the button next to "Refresh prices" (both places it appears)
   const addBtn=(anchorId,id)=>{
     const anchor=$(anchorId);if(!anchor||$(id))return;
