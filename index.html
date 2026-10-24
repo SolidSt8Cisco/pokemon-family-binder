@@ -1221,17 +1221,28 @@ try{
       if(known===0){l.textContent='Binder Total Value: calculating…';return}
       const s=document.createElement('strong');s.style.color='var(--accent)';s.textContent=fmt(t.sum);
       l.append('Binder Total Value: ',s);
-      if(t.missing>0)l.append(' · '+t.missing+' without a price');
+      if(refreshInProgress){
+        l.append(' · updating prices…');
+      }else if(t.missing>0){
+        l.append(' · '+t.missing+' without a price');
+      }
     });
   };
   const updatePanel=()=>{
     let sum=0,missing=0,count=0;
     for(const b of binders){const t=binderTotals(b);sum+=t.sum;missing+=t.missing;count+=t.count}
     $('valTotal').textContent=fmt(sum);
-    $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
+    // While a refresh is draining its queue, the "missing" count is inflated
+    // (queued cards have no cache entry yet). Show the total updating live, but
+    // hold the missing count until the refresh finishes.
+    if(refreshInProgress){
+      $('valSub').textContent=count+' card'+(count===1?'':'s')+' · updating prices…';
+    }else{
+      $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
+    }
   };
   const refreshUI=()=>{decorate();updatePanel()};
-        window.pkbMarket={refreshUI,cache,saveCache,getPrice:id=>{const h=cache[id];return h?h.p:undefined}};
+        window.pkbMarket={refreshUI,cache,saveCache,getPrice:id=>{const h=cache[id];return h?h.p:undefined},get refreshInProgress(){return refreshInProgress;}};
     // Backup source for cards TCGdex has no price for (pokemontcg.io, also TCGplayer market prices)
   const info={};
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1265,6 +1276,7 @@ try{
   const fallbackPrice=c=>{const p=fallbackChain.then(()=>fallbackPriceInner(c));fallbackChain=p.catch(()=>{});return p;};
   // Fetch prices (cached for 24 hours, 5 at a time)
   let running=false;
+  let refreshInProgress=false; // true while refreshPrices is draining its queue
   const refreshPrices=async force=>{
     if(running)return;
     const ids=[...new Set(binders.flatMap(b=>allCards(b).map(c=>String(c.id))))];
@@ -1273,7 +1285,7 @@ try{
 const todo=ids.filter(id=>force||!cache[id]);
     refreshUI();
     if(!todo.length){setStatus('valStatus','');return}
-    running=true;$('valRefreshBtn').disabled=true;
+    running=true;refreshInProgress=true;$('valRefreshBtn').disabled=true;
     const total=todo.length;let done=0;
     const sleep=ms=>new Promise(r=>setTimeout(r,ms));
     const fetchTcgdex=async id=>{
@@ -1321,7 +1333,7 @@ const todo=ids.filter(id=>force||!cache[id]);
       }
     };
     await Promise.all(Array.from({length:5},worker));
-    running=false;$('valRefreshBtn').disabled=false;
+    running=false;refreshInProgress=false;$('valRefreshBtn').disabled=false;
     saveCache();refreshUI();
     setStatus('valStatus','Prices updated.');
   };
@@ -2228,7 +2240,12 @@ try{
     if(btn1)btn1.disabled=n===0||btn1.dataset.busy==='1';
     if(btn2)btn2.disabled=n===0||btn2.dataset.busy==='1';
   };
-  const refreshCount=()=>setLabels(nullPriceIds().length);
+  const refreshCount=()=>{
+    // While the market-value patch is draining a refresh queue, hold the count —
+    // queued cards have no cache entry yet and would inflate it.
+    if(mk.refreshInProgress)return;
+    setLabels(nullPriceIds().length);
+  };
   refreshCount();
 
   let running=false;
@@ -2275,6 +2292,12 @@ try{
     const orig=mk.refreshUI;
     mk.refreshUI=function(){orig.apply(this,arguments);refreshCount()};
   }
+  // Also expose a way to force a recount once the refresh finishes
+  const origSetStatus=setStatus;
+  // (refreshPrices calls setStatus('valStatus','Prices updated.') at the end)
+  new MutationObserver(()=>{
+    if($('valStatus').textContent==='Prices updated.')refreshCount();
+  }).observe($('valStatus'),{childList:true,characterData:true,subtree:true});
   // Recompute when renderLibrary runs (new binders / imports / deletions)
   const origRL=renderLibrary;
   renderLibrary=function(){origRL.apply(this,arguments);refreshCount()};
