@@ -2177,8 +2177,12 @@ try{
   const addBtn=(anchorId,id)=>{
     const anchor=$(anchorId);if(!anchor||$(id))return;
     const b=document.createElement('button');
-    b.id=id;b.type='button';b.style.cssText='padding:4px 10px;font-size:.8rem;margin-left:6px';
-    b.textContent='Retry missing prices (0)';
+    b.id=id;b.type='button';
+    // Match the anchor button's size, but keep a small left gap so the two don't touch
+    b.style.cssText='margin-left:6px';
+    b.style.padding=getComputedStyle(anchor).padding;
+    b.style.fontSize=getComputedStyle(anchor).fontSize;
+    b.textContent='Retry (0)';
     b.title='Re-check only the cards that currently have no market price';
     anchor.insertAdjacentElement('afterend',b);
     return b;
@@ -2187,7 +2191,7 @@ try{
   const btn2=addBtn('binderRefreshBtn','retryMissingBtnBinder');
 
   const setLabels=n=>{
-    const t='Retry missing prices ('+n+')';
+    const t='Retry ('+n+')';
     if(btn1)btn1.textContent=t;
     if(btn2)btn2.textContent=t;
     if(btn1)btn1.disabled=n===0||btn1.dataset.busy==='1';
