@@ -2111,4 +2111,139 @@ try{
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
 }catch(err){console.error('Manual value badge patch failed:',err)}
+</script><script>
+/* PATCH: "Retry missing prices" button — re-checks ONLY cards whose market price
+   is currently null (lookup finished, no TCGplayer price found). Needs the
+   market-value patch above it. To undo: delete this whole <script> block. */
+try{
+  const mk=window.pkbMarket;
+  if(!mk||!mk.cache)throw new Error('Market value patch not available');
+
+  // Same variant order + price picking as the market-value patch, kept local so
+  // this block doesn't depend on the patch IIFE's internal helpers.
+  const API='https://api.tcgdex.net/v2/en/cards/';
+  const ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
+  const pickPrice=full=>{
+    const tp=full&&full.pricing&&full.pricing.tcgplayer;if(!tp)return null;
+    const g=v=>{if(!v||typeof v!=='object')return null;const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);return p!=null&&Number(p)>0?Number(p):null};
+    for(const k of ORDER){const p=g(tp[k]);if(p!=null)return p}
+    for(const k of Object.keys(tp)){const p=g(tp[k]);if(p!=null)return p}
+    return null;
+  };
+  const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const ptcgPick=card=>{
+    const pr=card&&card.tcgplayer&&card.tcgplayer.prices;if(!pr)return null;
+    const g=v=>{const p=v&&(v.market!=null?v.market:v.mid);return p!=null&&Number(p)>0?Number(p):null};
+    for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=g(pr[k]);if(p!=null)return p}
+    for(const k of Object.keys(pr)){const p=g(pr[k]);if(p!=null)return p}
+    return null;
+  };
+  let lastFb=0;
+  const fallbackPrice=async c=>{ // number = price, null = not found, undefined = couldn't check
+    if(!c||!c.name||!c.localId)return null;
+    const slot=Math.max(Date.now(),lastFb+2200);lastFb=slot;
+    await new Promise(r=>setTimeout(r,slot-Date.now()));
+    try{
+      const num=String(c.localId).replace(/^0+(?=\d)/,'').replace(/"/g,'');
+      const q='name:"'+String(c.name).replace(/"/g,'')+'" number:"'+num+'"';
+      const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),8000);
+      const r=await fetch('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent(q)+'&select=id,name,number,set,tcgplayer',{signal:ctl.signal});
+      clearTimeout(to);
+      if(!r.ok)return r.status===404?null:undefined;
+      let list=((await r.json()).data)||[];
+      if(list.length>1&&c.setName){const want=normS(c.setName);const m=list.filter(x=>x.set&&normS(x.set.name)===want);if(m.length)list=m}
+      const prices=list.map(ptcgPick).filter(p=>p!=null);
+      if(!prices.length)return null;
+      return prices.every(p=>p===prices[0])?prices[0]:null;
+    }catch(e){return undefined}
+  };
+
+  // Gather distinct cards in binders whose cached price is null (finished, no price)
+  const cardInfoById={};
+  const nullPriceIds=()=>{
+    const ids=[];
+    for(const b of binders)for(const p of b.pages)for(const c of p.cards){
+      if(!c||!c.id)continue;
+      const id=String(c.id);
+      cardInfoById[id]=c;
+      const hit=mk.cache[id];
+      if(hit&&hit.p==null&&!ids.includes(id))ids.push(id);
+    }
+    return ids;
+  };
+
+  // Add the button next to "Refresh prices" (both places it appears)
+  const addBtn=(anchorId,id)=>{
+    const anchor=$(anchorId);if(!anchor||$(id))return;
+    const b=document.createElement('button');
+    b.id=id;b.type='button';b.style.cssText='padding:4px 10px;font-size:.8rem;margin-left:6px';
+    b.textContent='Retry missing prices (0)';
+    b.title='Re-check only the cards that currently have no market price';
+    anchor.insertAdjacentElement('afterend',b);
+    return b;
+  };
+  const btn1=addBtn('valRefreshBtn','retryMissingBtn');
+  const btn2=addBtn('binderRefreshBtn','retryMissingBtnBinder');
+
+  const setLabels=n=>{
+    const t='Retry missing prices ('+n+')';
+    if(btn1)btn1.textContent=t;
+    if(btn2)btn2.textContent=t;
+    if(btn1)btn1.disabled=n===0||btn1.dataset.busy==='1';
+    if(btn2)btn2.disabled=n===0||btn2.dataset.busy==='1';
+  };
+  const refreshCount=()=>setLabels(nullPriceIds().length);
+  refreshCount();
+
+  let running=false;
+  const retryMissing=async()=>{
+    if(running)return;
+    const ids=nullPriceIds();
+    if(!ids.length){setStatus('valStatus','No missing prices to retry.');return}
+    running=true;
+    if(btn1){btn1.dataset.busy='1';btn1.disabled=true}
+    if(btn2){btn2.dataset.busy='1';btn2.disabled=true}
+    const total=ids.length;let done=0,fixed=0;
+    const todo=ids.slice();
+    const worker=async()=>{
+      while(todo.length){
+        const id=todo.shift();
+        try{
+          const r=await fetch(API+encodeURIComponent(id));
+          if(r.ok){mk.cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
+          else if(r.status===404){mk.cache[id]={p:null,t:Date.now()}}
+          if(mk.cache[id]&&mk.cache[id].p==null){
+            const fp=await fallbackPrice(cardInfoById[id]);
+            mk.cache[id]={p:fp==null?null:fp,t:Date.now(),fb:fp===undefined?0:1};
+          }
+          if(mk.cache[id]&&mk.cache[id].p!=null)fixed++;
+        }catch(e){}
+        done++;
+        setStatus('valStatus','Retrying missing prices… '+done+' of '+total+' ('+fixed+' found)');
+        if(done%10===0){mk.saveCache();mk.refreshUI()}
+      }
+    };
+    await Promise.all(Array.from({length:5},worker));
+    mk.saveCache();mk.refreshUI();
+    running=false;
+    if(btn1)delete btn1.dataset.busy;
+    if(btn2)delete btn2.dataset.busy;
+    refreshCount();
+    setStatus('valStatus','Retry done. Found '+fixed+' of '+total+' missing price'+(total===1?'':'s')+'.');
+  };
+  if(btn1)btn1.onclick=retryMissing;
+  if(btn2)btn2.onclick=retryMissing;
+
+  // Keep the "(N)" count in sync as prices change elsewhere
+  if(mk.refreshUI){
+    const orig=mk.refreshUI;
+    mk.refreshUI=function(){orig.apply(this,arguments);refreshCount()};
+  }
+  // Recompute when renderLibrary runs (new binders / imports / deletions)
+  const origRL=renderLibrary;
+  renderLibrary=function(){origRL.apply(this,arguments);refreshCount()};
+  // And once when the library screen opens (prices may have synced from another device)
+  const origSL=showLibrary;
+  showLibrary=function(){origSL.apply(this,arguments);refreshCount()};
+}catch(err){console.error('Retry missing prices patch failed:',err)}
 </script></body></html>
