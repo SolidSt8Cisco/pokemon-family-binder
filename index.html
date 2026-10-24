@@ -634,6 +634,8 @@ $('cartClearBtn').onclick=async()=>{
   renderCart();
   setStatus('cartStatus','Cart cleared.');
 };
+/* Cart search — mirrors the binder search: same #number parsing, same
+   no-image → pick-photo flow, same Owned / In-cart badges. */
 $('cartSearchForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const q=$('cartQuery').value.trim();
@@ -643,17 +645,19 @@ $('cartSearchForm').addEventListener('submit',async e=>{
   $(resultsId).innerHTML='';
   try{
     const {matches,name:sName,num:sNum}=await searchCards(q);
-    if(!matches.length){setStatus(statusId,describeSearch(matches,sName,sNum));return}
-    setStatus(statusId,describeSearch(matches,sName,sNum)+` Adding to ${cartOwner}'s cart.`);
+    setStatus(statusId,describeSearch(matches,sName,sNum)+(matches.length?` Adding to ${cartOwner}'s cart.`:''));
+    if(!matches.length)return;
     for(const c of matches){
       const b=document.createElement('button');b.type='button';b.className='result';
-      const img=document.createElement('img');img.loading='lazy';img.alt=c.name;img.src=cardImageUrl(c.image,'low');
+      const img=document.createElement('img');img.loading='lazy';img.alt=c.name||'';img.src=cardImageUrl(c.image,'low');
       img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=cardImageUrl(c.image,'low').replace(/\.webp$/i,'.png')}else img.style.display='none'};
       const ownedCount=binders.reduce((n,bn)=>{for(const p of bn.pages)for(const card of p.cards)if(card&&card.id===c.id)n++;return n},0);
       const inCartCount=cartItems.filter(x=>x.card_id===c.id&&x.owner===cartOwner).length;
       const name=document.createElement('strong');name.textContent=c.name;
-      const detail=document.createElement('small');detail.textContent=[c.set?.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id;
+      const detail=document.createElement('small');
+      detail.textContent=[c.set&&c.set.name,c.localId?'#'+c.localId:''].filter(Boolean).join(' · ')||c.id;
       b.append(img,name,detail);
+      if(!c.image){img.style.display='none';name.textContent=c.name+' (no image)';detail.textContent+=' · '+c.id}
       if(ownedCount>0){
         const badge=document.createElement('span');
         badge.className='result-badge';
@@ -667,19 +671,28 @@ $('cartSearchForm').addEventListener('submit',async e=>{
         b.append(badge);
       }
       b.onclick=async()=>{
+        let photoFile=null,savedPhoto=null;
+        if(!c.image){
+          savedPhoto=findSavedPhoto(c.id);
+          if(!savedPhoto){
+            photoFile=await pickPhoto(); // must run before any await so the browser allows the picker
+            if(!photoFile){setStatus(statusId,'This card has no picture on TCGdex. Choose a photo of your card to add it.');return}
+          }
+        }
         b.disabled=true;
         try{
           let full=c;
           const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
           if(r.ok)full=await r.json();
-          const setName=full.set?.name||c.set?.name||null;
+          const image=cardImageUrl(full.image||c.image,'high')||savedPhoto||await uploadCardPhoto(photoFile);
+          const setName=(full.set&&full.set.name)||(c.set&&c.set.name)||null;
           const localId=(full.localId||c.localId||null);
           const price=extractPrice(full);
           const {error}=await supabaseClient.from('family_shopping_cart').insert({
             family_id:signedInUser.id,
             card_id:String(c.id),
             card_name:full.name||c.name,
-            image_url:cardImageUrl(full.image||c.image,'high'),
+            image_url:image,
             set_name:setName,
             local_id:localId!=null?String(localId):null,
             online_price:price?price.value:null,
@@ -869,6 +882,12 @@ async function uploadCardPhoto(file){
   const {error}=await supabaseClient.storage.from('Pokemon').upload(path,blob,{contentType:'image/jpeg'});
   if(error)throw new Error('Could not upload photo: '+error.message);
   return supabaseClient.storage.from('Pokemon').getPublicUrl(path).data.publicUrl;
+}
+function findSavedPhoto(id){
+  for(const bn of binders)for(const p of bn.pages)for(const card of p.cards){
+    if(card&&card.id===id&&card.image)return card.image;
+  }
+  return null;
 }
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
