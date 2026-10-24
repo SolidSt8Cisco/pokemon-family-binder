@@ -1275,25 +1275,46 @@ const todo=ids.filter(id=>force||!cache[id]);
     if(!todo.length){setStatus('valStatus','');return}
     running=true;$('valRefreshBtn').disabled=true;
     const total=todo.length;let done=0;
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    const fetchTcgdex=async id=>{
+      // Retry 429 / 5xx / network errors up to 3 attempts with backoff.
+      for(let attempt=0;attempt<3;attempt++){
+        try{
+          const r=await fetch(API+encodeURIComponent(id));
+          if(r.ok)return r;
+          if(r.status===404)return r;
+          if(r.status===429||r.status>=500){
+            if(attempt<2){
+              const ra=Number(r.headers.get('retry-after'));
+              await sleep(ra>0?Math.min(ra,15)*1000:1500*(attempt+1)*(attempt+1));
+              continue;
+            }
+          }
+          return r;
+        }catch(e){
+          if(attempt<2){await sleep(1500*(attempt+1)*(attempt+1));continue}
+          throw e;
+        }
+      }
+    };
     const worker=async()=>{
       while(todo.length){
         const id=todo.shift();
+        await sleep(Math.random()*250); // stagger so 5 workers don't hit TCGdex in lockstep
         try{
-          const r=await fetch(API+encodeURIComponent(id));
-          if(r.ok){cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
-          else if(r.status===404){cache[id]={p:null,t:Date.now()}}
+          const r=await fetchTcgdex(id);
+          if(r&&r.ok){cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
+          else if(r&&r.status===404){cache[id]={p:null,t:Date.now()}}
+          else {delete cache[id];} // unrecoverable — leave uncached, retry next time
           if(cache[id]&&cache[id].p==null){
             const fp=await fallbackPrice(info[id]);
             if(fp===undefined){
-              // Fallback couldn't be reached (rate limit / timeout / 5xx).
-              // Don't cache it as "no price" — leave it uncached so the next
-              // refresh (or the retry button) tries again.
-              delete cache[id];
+              delete cache[id]; // temporary fallback failure — don't lock in "no price"
             } else {
-              cache[id]={p:fp==null?null:fp,t:Date.now(),fb:fp===undefined?0:1};
+              cache[id]={p:fp==null?null:fp,t:Date.now(),fb:1};
             }
           }
-        }catch(e){}
+        }catch(e){delete cache[id];}
         done++;
         setStatus('valStatus','Fetching prices… '+done+' of '+total);
         if(done%10===0){saveCache();refreshUI()}
@@ -1647,51 +1668,15 @@ try{
     const info={},ids=[];
     for(const c of st.sel.a.concat(st.sel.b)){const id=String(c.id);if(isStale(c)&&!info[id]){info[id]=c;ids.push(id)}}
     const todo=ids.slice();let n=0;
-    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-    const fetchTcgdex=async id=>{
-      // Retry 429 / 5xx / network errors up to 3 attempts with backoff.
-      // 404 and 2xx return immediately (404 = card not in TCGdex, treat as no price).
-      for(let attempt=0;attempt<3;attempt++){
-        try{
-          const r=await fetch(API+encodeURIComponent(id));
-          if(r.ok)return r;
-          if(r.status===404)return r;
-          if(r.status===429||r.status>=500){
-            if(attempt<2){
-              const ra=Number(r.headers.get('retry-after'));
-              await sleep(ra>0?Math.min(ra,15)*1000:1500*(attempt+1)*(attempt+1));
-              continue;
-            }
-          }
-          return r;
-        }catch(e){
-          if(attempt<2){await sleep(1500*(attempt+1)*(attempt+1));continue}
-          throw e;
-        }
-      }
-    };
     const worker=async()=>{
       while(todo.length){
         const id=todo.shift();
-        // Small stagger so the 5 workers don't hit TCGdex in the same instant
-        await sleep(Math.random()*250);
         try{
-          const r=await fetchTcgdex(id);
-          if(r&&r.ok){cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
-          else if(r&&r.status===404){cache[id]={p:null,t:Date.now()}}
-          else {delete cache[id];} // unrecoverable this pass — leave uncached, not "no price"
-          if(cache[id]&&cache[id].p==null){
-            const fp=await fallbackPrice(info[id]);
-            if(fp===undefined){
-              delete cache[id];
-            } else {
-              cache[id]={p:fp==null?null:fp,t:Date.now(),fb:1};
-            }
-          }
-        }catch(e){delete cache[id];}
-        done++;
-        setStatus('valStatus','Fetching prices… '+done+' of '+total);
-        if(done%10===0){saveCache();refreshUI()}
+          const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id));
+          if(r.ok)cache[id]={p:pickT(await r.json()),t:Date.now(),fb:0};
+          else if(r.status===404)cache[id]={p:null,t:Date.now(),fb:0};
+        }catch(e){}
+        n++;say('Checking TCGdex… '+n+' of '+ids.length);
       }
     };
     await Promise.all([worker(),worker(),worker()]);
