@@ -1463,7 +1463,10 @@ try{
   document.body.insertAdjacentHTML('beforeend','<div class="modal" id="noPriceModal" role="dialog" aria-modal="true" aria-labelledby="noPriceTitle"><div class="dialog"><div class="dialoghead"><h2 id="noPriceTitle">Cards without a price</h2><button class="close" id="noPriceClose" aria-label="Close">×</button></div><p class="sub" id="noPriceSub"></p><div id="noPriceList" class="list"></div></div></div>');
   const closeList=()=>$('noPriceModal').classList.remove('open');
   const updateLink=()=>{
-    const n=missingCards().length;
+    // Hold the count while a refresh is draining its queue (matches Retry (N))
+    const mk=window.pkbMarket;
+    if(mk&&mk.refreshInProgress)return;
+    const n=(mk&&mk.missingPriceCount)?mk.missingPriceCount():missingCards().length;
     $('noPriceBtn').classList.toggle('hidden',n===0);
     $('noPriceBtn').textContent='🔴 Show cards without a price ('+n+')';
   };
@@ -2200,6 +2203,9 @@ try{
       return prices.every(p=>p===prices[0])?prices[0]:null;
     }catch(e){return undefined}
   };
+  // Wrapper that serializes fallback calls through fallbackChain (fixes ReferenceError
+  // in retryMissing — the retry patch only defined fallbackPriceInner, not fallbackPrice).
+  const fallbackPrice=c=>{const p=fallbackChain.then(()=>fallbackPriceInner(c));fallbackChain=p.catch(()=>{});return p;};
 
   // Gather distinct cards in binders whose cached price is null (finished, no price)
   // AND that do NOT have a manual value. Manual-valued cards are never retried.
@@ -2247,6 +2253,8 @@ try{
     setLabels(nullPriceIds().length);
   };
   refreshCount();
+  // Shared counting function so the no-price button uses the same number
+  mk.missingPriceCount=()=>nullPriceIds().length;
 
   let running=false;
   const retryMissing=async()=>{
