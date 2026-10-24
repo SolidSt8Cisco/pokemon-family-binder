@@ -1261,6 +1261,7 @@ try{
       return prices.every(p=>p===prices[0])?prices[0]:null; // if several different cards match, don't guess
     }catch(e){return undefined}
   };
+      const fallbackPrice=c=>{const p=fallbackChain.then(()=>fallbackPriceInner(c));fallbackChain=p.catch(()=>{});return p;};
   // Fetch prices (cached for 24 hours, 5 at a time)
   let running=false;
   const refreshPrices=async force=>{
@@ -1282,7 +1283,14 @@ const todo=ids.filter(id=>force||!cache[id]);
           else if(r.status===404){cache[id]={p:null,t:Date.now()}}
           if(cache[id]&&cache[id].p==null){
             const fp=await fallbackPrice(info[id]);
-            cache[id]={p:fp==null?null:fp,t:Date.now(),fb:fp===undefined?0:1};
+            if(fp===undefined){
+              // Fallback couldn't be reached (rate limit / timeout / 5xx).
+              // Don't cache it as "no price" — leave it uncached so the next
+              // refresh (or the retry button) tries again.
+              delete cache[id];
+            } else {
+              cache[id]={p:fp==null?null:fp,t:Date.now(),fb:fp===undefined?0:1};
+            }
           }
         }catch(e){}
         done++;
@@ -1638,15 +1646,51 @@ try{
     const info={},ids=[];
     for(const c of st.sel.a.concat(st.sel.b)){const id=String(c.id);if(isStale(c)&&!info[id]){info[id]=c;ids.push(id)}}
     const todo=ids.slice();let n=0;
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    const fetchTcgdex=async id=>{
+      // Retry 429 / 5xx / network errors up to 3 attempts with backoff.
+      // 404 and 2xx return immediately (404 = card not in TCGdex, treat as no price).
+      for(let attempt=0;attempt<3;attempt++){
+        try{
+          const r=await fetch(API+encodeURIComponent(id));
+          if(r.ok)return r;
+          if(r.status===404)return r;
+          if(r.status===429||r.status>=500){
+            if(attempt<2){
+              const ra=Number(r.headers.get('retry-after'));
+              await sleep(ra>0?Math.min(ra,15)*1000:1500*(attempt+1)*(attempt+1));
+              continue;
+            }
+          }
+          return r;
+        }catch(e){
+          if(attempt<2){await sleep(1500*(attempt+1)*(attempt+1));continue}
+          throw e;
+        }
+      }
+    };
     const worker=async()=>{
       while(todo.length){
         const id=todo.shift();
+        // Small stagger so the 5 workers don't hit TCGdex in the same instant
+        await sleep(Math.random()*250);
         try{
-          const r=await fetch('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id));
-          if(r.ok)cache[id]={p:pickT(await r.json()),t:Date.now(),fb:0};
-          else if(r.status===404)cache[id]={p:null,t:Date.now(),fb:0};
-        }catch(e){}
-        n++;say('Checking TCGdex… '+n+' of '+ids.length);
+          const r=await fetchTcgdex(id);
+          if(r&&r.ok){cache[id]={p:pickPrice(await r.json()),t:Date.now()}}
+          else if(r&&r.status===404){cache[id]={p:null,t:Date.now()}}
+          else {delete cache[id];} // unrecoverable this pass — leave uncached, not "no price"
+          if(cache[id]&&cache[id].p==null){
+            const fp=await fallbackPrice(info[id]);
+            if(fp===undefined){
+              delete cache[id];
+            } else {
+              cache[id]={p:fp==null?null:fp,t:Date.now(),fb:1};
+            }
+          }
+        }catch(e){delete cache[id];}
+        done++;
+        setStatus('valStatus','Fetching prices… '+done+' of '+total);
+        if(done%10===0){saveCache();refreshUI()}
       }
     };
     await Promise.all([worker(),worker(),worker()]);
@@ -2139,9 +2183,10 @@ try{
     return null;
   };
   let lastFb=0;
-  const fallbackPrice=async c=>{ // number = price, null = not found, undefined = couldn't check
+  let fallbackChain=Promise.resolve(); // serialize all fallback calls across workers
+  const fallbackPriceInner=async c=>{
     if(!c||!c.name||!c.localId)return null;
-    const slot=Math.max(Date.now(),lastFb+2200);lastFb=slot;
+    const slot=Math.max(Date.now(),lastFb+2200);lastFb=slot; // stay under the free rate limit
     await new Promise(r=>setTimeout(r,slot-Date.now()));
     try{
       const num=String(c.localId).replace(/^0+(?=\d)/,'').replace(/"/g,'');
