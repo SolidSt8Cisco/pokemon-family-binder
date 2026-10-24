@@ -1194,7 +1194,17 @@ try{
   };
   const allCards=b=>b.pages.flatMap(p=>p.cards.filter(c=>c&&c.id));
     window.pkbManual=window.pkbManual||{};
-  const binderTotals=b=>{let sum=0,missing=0;for(const c of allCards(b)){const id=String(c.id),h=cache[id],m=window.pkbManual[id];if(m!=null)sum+=m;else if(h&&h.p!=null)sum+=h.p;else missing++}return {sum,missing,count:allCards(b).length}};
+  const binderTotals=b=>{
+    let sum=0,missing=0,unknown=0;
+    for(const c of allCards(b)){
+      const id=String(c.id),h=cache[id],m=window.pkbManual[id];
+      if(m!=null)sum+=m;                        // manual value
+      else if(h&&h.p!=null)sum+=h.p;            // market price known
+      else if(h)missing++;                      // cache entry, price known to be absent
+      else unknown++;                           // not yet checked — not the same as "missing"
+    }
+    return {sum,missing,unknown,count:allCards(b).length};
+  };
 
   // Panel above the binder tiles
   const panel=document.createElement('div');panel.className='panel';
@@ -1223,22 +1233,24 @@ try{
       l.append('Binder Total Value: ',s);
       if(refreshInProgress){
         l.append(' · updating prices…');
-      }else if(t.missing>0){
-        l.append(' · '+t.missing+' without a price');
+      }else{
+        if(t.missing>0)l.append(' · '+t.missing+' without a price');
+        if(t.unknown>0)l.append(' · '+t.unknown+' not checked yet');
       }
     });
   };
   const updatePanel=()=>{
-    let sum=0,missing=0,count=0;
-    for(const b of binders){const t=binderTotals(b);sum+=t.sum;missing+=t.missing;count+=t.count}
+    let sum=0,missing=0,unknown=0,count=0;
+    for(const b of binders){const t=binderTotals(b);sum+=t.sum;missing+=t.missing;unknown+=t.unknown;count+=t.count}
     $('valTotal').textContent=fmt(sum);
-    // While a refresh is draining its queue, the "missing" count is inflated
-    // (queued cards have no cache entry yet). Show the total updating live, but
-    // hold the missing count until the refresh finishes.
     if(refreshInProgress){
       $('valSub').textContent=count+' card'+(count===1?'':'s')+' · updating prices…';
     }else{
-      $('valSub').textContent=count+' card'+(count===1?'':'s')+(missing?' · '+missing+' without a price':'')+' · TCGplayer market prices';
+      const parts=[count+' card'+(count===1?'':'s')];
+      if(missing)parts.push(missing+' without a price');
+      if(unknown)parts.push(unknown+' not checked yet');
+      parts.push('TCGplayer market prices');
+      $('valSub').textContent=parts.join(' · ');
     }
   };
   const refreshUI=()=>{decorate();updatePanel()};
