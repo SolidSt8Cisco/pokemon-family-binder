@@ -65,7 +65,7 @@
 <main class="wrap">
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
-<div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><p id="collCount" class="status" aria-live="polite"></p><div id="collList" class="list"></div></div>
+<div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><div class="row" style="margin-top:8px;gap:8px"><button id="dupesBtn" type="button" style="padding:5px 10px;font-size:.8rem">Show duplicates</button><button id="paidBtn" type="button" style="padding:5px 10px;font-size:.8rem">Show cards with a price I paid</button></div><p id="collCount" class="status" aria-live="polite"></p><div id="collList" class="list"></div></div>
 <div class="panel hidden" id="backfillPanel"><p class="sub" style="margin:0 0 8px" id="backfillMsg"></p><button id="backfillBtn" type="button" class="primary" style="width:auto;padding:10px 16px">Fill missing card details</button><p id="backfillStatus" class="status" aria-live="polite" style="margin-top:8px"></p></div>
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
@@ -1944,40 +1944,6 @@ try{
   showLibrary=function(){origSL.apply(this,arguments);loadOwners()};
 }catch(err){console.error('Owner balance patch failed:',err)}
 </script><script>
-/* PATCH: type * in "Search all my cards" to list every card you own more than once. To undo: delete this whole <script> block. */
-try{
-  const showDupes=()=>{
-    const map=new Map();
-    for(const b of binders)for(const p of b.pages)for(const c of p.cards){
-      if(!c||!c.id)continue;
-      const id=String(c.id),e=map.get(id)||{card:c,total:0,by:{}};
-      e.total++;e.by[b.name]=(e.by[b.name]||0)+1;map.set(id,e);
-    }
-    const list=[...map.values()].filter(e=>e.total>1).sort((a,b)=>b.total-a.total||a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
-    const copies=list.reduce((n,e)=>n+e.total,0);
-    setStatus('collCount',list.length?list.length+' card'+(list.length===1?'':'s')+' you own more than once ('+copies+' copies in total)':'No duplicates found. Every card is in your binders only once.');
-    const el=$('collList');el.innerHTML='';
-    for(const e of list){
-      const row=document.createElement('button');row.type='button';row.className='item';
-      const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=String(e.card.image||'').replace('/high.','/low.');
-      img.onerror=()=>{img.style.visibility='hidden'};
-      const meta=document.createElement('div');meta.className='meta';
-      const n=document.createElement('strong');n.textContent=e.card.name;
-      const s=document.createElement('small');
-      s.textContent=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+Object.entries(e.by).map(([k,v])=>k+(v>1?' ×'+v:'')).join(', ');
-      meta.append(n,s);
-      const bd=document.createElement('span');bd.className='badge';bd.textContent='×'+e.total;
-      row.append(img,meta,bd);
-      row.onclick=()=>openCardModal(e.card);
-      el.append(row);
-    }
-  };
-  const isStar=()=>$('collQuery').value.trim()==='*';
-  $('collQuery').addEventListener('input',()=>{if(isStar())showDupes()});
-  const origRC=renderCollection;
-  renderCollection=function(){if(isStar())showDupes();else origRC.apply(this,arguments)};
-}catch(err){console.error('Duplicate search patch failed:',err)}
-</script><script>
 /* PATCH: edit values right inside the "cards without a price" list. Needs the no-price flag patch and the manual value patch. To undo: delete this whole <script> block. */
 try{
   const needs=id=>{
@@ -2325,4 +2291,77 @@ try{
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);refreshCount()};
 }catch(err){console.error('Retry missing prices patch failed:',err)}
+</script><script>
+/* PATCH: "Show duplicates" and "Show cards with a price I paid" buttons under the
+   collection search bar. Replaces the old "*" shortcut. To undo: delete this
+   whole <script> block and remove #dupesBtn / #paidBtn from the HTML. */
+try{
+  const collList=$('collList');
+
+  const baseCollectionRows=()=>{
+    const all=[];
+    for(const b of binders)for(const p of b.pages)p.cards.forEach((c,i)=>{if(c)all.push({card:c,binder:b.name,page:p.pageNumber,slot:i+1})});
+    return all;
+  };
+  const ownedCounts=all=>{
+    const owned={};all.forEach(x=>{owned[x.card.id]=(owned[x.card.id]||0)+1});
+    return owned;
+  };
+
+  const cardRow=(card,metaText,badgeText)=>{
+    const row=document.createElement('button');row.type='button';row.className='item';
+    const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=String(card.image||'').replace('/high.','/low.');
+    img.onerror=()=>{img.style.visibility='hidden'};
+    const meta=document.createElement('div');meta.className='meta';
+    const n=document.createElement('strong');n.textContent=card.name;
+    const s=document.createElement('small');s.textContent=metaText;
+    meta.append(n,s);
+    row.append(img,meta);
+    if(badgeText){const bd=document.createElement('span');bd.className='badge';bd.textContent=badgeText;row.append(bd)}
+    row.onclick=()=>openCardModal(card);
+    return row;
+  };
+
+  // ---- Duplicates ----
+  const showDupes=()=>{
+    const all=baseCollectionRows();
+    const map=new Map();
+    for(const x of all){
+      const id=String(x.card.id),e=map.get(id)||{card:x.card,total:0,by:{}};
+      e.total++;e.by[x.binder]=(e.by[x.binder]||0)+1;map.set(id,e);
+    }
+    const list=[...map.values()].filter(e=>e.total>1).sort((a,b)=>b.total-a.total||a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
+    const copies=list.reduce((n,e)=>n+e.total,0);
+    setStatus('collCount',list.length?list.length+' card'+(list.length===1?'':'s')+' you own more than once ('+copies+' copies in total)':'No duplicates found. Every card is in your binders only once.');
+    collList.innerHTML='';
+    for(const e of list){
+      const where=Object.entries(e.by).map(([k,v])=>k+(v>1?' ×'+v:'')).join(', ');
+      const metaText=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+where;
+      collList.append(cardRow(e.card,metaText,'×'+e.total));
+    }
+  };
+
+  // ---- Price I paid ----
+  const showPaid=()=>{
+    const all=baseCollectionRows().filter(x=>x.card.purchasePrice!=null);
+    all.sort((a,b)=>b.card.purchasePrice-a.card.purchasePrice||a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
+    const total=all.reduce((s,x)=>s+Number(x.card.purchasePrice),0);
+    setStatus('collCount',all.length?all.length+' card'+(all.length===1?'':'s')+' with a price I paid (total spent '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(total)+')':'No cards have a price I paid entered yet.');
+    collList.innerHTML='';
+    const owned=ownedCounts(baseCollectionRows());
+    for(const x of all){
+      const metaText=[x.card.setName,x.card.localId?'#'+x.card.localId:x.card.id].filter(Boolean).join(' · ')+' · '+x.binder+', page '+x.page;
+      collList.append(cardRow(x.card,metaText,'$'+Number(x.card.purchasePrice).toFixed(2)));
+    }
+  };
+
+  $('dupesBtn').onclick=()=>{$('collQuery').value='';showDupes()};
+  $('paidBtn').onclick=()=>{$('collQuery').value='';showPaid()};
+
+  // If the user starts typing again, hand control back to the normal search
+  $('collQuery').addEventListener('input',()=>{
+    if(!$('collQuery').value.trim())return;
+    // normal search handler (renderCollection) already listens on input and rebuilds the list
+  });
+}catch(err){console.error('Collection buttons patch failed:',err)}
 </script></body></html>
