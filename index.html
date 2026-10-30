@@ -26,6 +26,7 @@
 .primary{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700;width:100%;padding:14px}.danger{background:#472b34;border-color:#79424f}.danger:hover{background:#5a3441}.list{display:grid;gap:8px;margin-top:10px}.item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:#111b28;border-radius:10px;padding:6px;color:var(--text);text-align:left;cursor:pointer;font:inherit}.item:hover{background:#16222f}.item:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.item img{width:44px;aspect-ratio:2.5/3.5;object-fit:contain;flex:none}.item .meta{min-width:0}.item strong{display:block;overflow-wrap:anywhere}.item small{color:var(--muted)}.badge{margin-left:auto;background:var(--accent);color:#101722;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem;flex:none}
 .owner-chip{display:inline-block;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:#111b28;color:var(--text);cursor:pointer;font:inherit;font-size:.9rem}
 .owner-chip.active{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700}
+.coll-btn.active{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700}
 .cart-group{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:12px;overflow:hidden}
 .cart-group-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
 .cart-group-head strong{font-size:1rem}
@@ -65,7 +66,7 @@
 <main class="wrap">
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
-<div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><div class="row" style="margin-top:8px;gap:8px"><button id="dupesBtn" type="button" style="padding:5px 10px;font-size:.8rem">Duplicates</button><button id="paidBtn" type="button" style="padding:5px 10px;font-size:.8rem">Price I Paid</button></div><p id="collCount" class="status" aria-live="polite"></p><div id="collList" class="list"></div></div>
+<div class="row" style="margin-top:8px;gap:8px"><button id="dupesBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Duplicates</button><button id="paidBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Price I Paid</button></div>
 <div class="panel hidden" id="backfillPanel"><p class="sub" style="margin:0 0 8px" id="backfillMsg"></p><button id="backfillBtn" type="button" class="primary" style="width:auto;padding:10px 16px">Fill missing card details</button><p id="backfillStatus" class="status" aria-live="polite" style="margin-top:8px"></p></div>
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
@@ -2355,13 +2356,38 @@ try{
     }
   };
 
-  $('dupesBtn').onclick=()=>{$('collQuery').value='';showDupes()};
-  $('paidBtn').onclick=()=>{$('collQuery').value='';showPaid()};
+   // ---- Toggle wiring ----
+  let activeView=null; // 'dupes' | 'paid' | null
 
-  // If the user starts typing again, hand control back to the normal search
+  const setActive=view=>{
+    activeView=view;
+    $('dupesBtn').classList.toggle('active',view==='dupes');
+    $('paidBtn').classList.toggle('active',view==='paid');
+  };
+
+  const clearList=()=>{
+    // Restore the empty-state message the normal renderCollection shows when the box is empty
+    const all=baseCollectionRows();
+    setStatus('collCount',`${all.length} card${all.length===1?'':'s'} in your collection. Start typing to search.`);
+    collList.innerHTML='';
+  };
+
+  $('dupesBtn').onclick=()=>{
+    $('collQuery').value='';
+    if(activeView==='dupes'){setActive(null);clearList();return}
+    setActive('dupes');showDupes();
+  };
+  $('paidBtn').onclick=()=>{
+    $('collQuery').value='';
+    if(activeView==='paid'){setActive(null);clearList();return}
+    setActive('paid');showPaid();
+  };
+
+  // If the user starts typing, drop the button highlight and let normal search take over
   $('collQuery').addEventListener('input',()=>{
     if(!$('collQuery').value.trim())return;
-    // normal search handler (renderCollection) already listens on input and rebuilds the list
+    setActive(null);
+    // normal renderCollection handler already rebuilds the list on input
   });
 }catch(err){console.error('Collection buttons patch failed:',err)}
 </script></body></html>
