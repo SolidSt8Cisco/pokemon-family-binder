@@ -76,7 +76,6 @@
     <button id="toBindersBtn" type="button" style="padding:5px 10px;font-size:.8rem">← Binders</button>
     <h1 style="font-size:1.1rem;margin:0">Sealed collection</h1>
   </div>
-  <button id="cartOpenBtn2" type="button">🛒 Shopping cart <span id="cartCountBadge2" class="badge" style="margin-left:6px">0</span></button>
 </div>
 <div id="totesGrid" class="library-grid"></div>
 <p id="totesStatus" class="status" aria-live="polite"></p>
@@ -2478,13 +2477,18 @@ try{
   }
   // alias used by the totes patch
   async function loadSealedProducts(toteId){
+    if(!toteId){sealedItems=[];renderSealed();return}
     await loadSealed(toteId);
-    if(typeof renderSealed==='function')renderSealed();
+    renderSealed();
   }
 
   function renderSealed(){
     const grid=$('sealedGrid'),empty=$('sealedEmpty');
     if(!grid)return;
+    // Only render when we're in a tote. Otherwise we'd paint the flat "all sealed"
+    // list into #sealedGrid, which belongs to #toteDetailView, and it would look
+    // like every new tote already contains an Evolving Skies Booster Box.
+    if(!$('toteDetailView') || $('toteDetailView').classList.contains('hidden')){grid.innerHTML='';empty.classList.add('hidden');return}
     grid.innerHTML='';
     if(!sealedItems.length){empty.classList.remove('hidden');return}
     empty.classList.add('hidden');
@@ -2604,9 +2608,10 @@ try{
   const _origShowLibrary=showLibrary;
   showLibrary=function(){_origShowLibrary.apply(this,arguments);loadSealed().then(()=>{if(!$('sealedView').classList.contains('hidden'))renderSealed()})};
 
-  // First load after sign-in
+  // First load after sign-in — don't preload the flat sealed list. Each tote
+  // loads its own items when opened, so there's nothing to pre-fetch here.
   const _origLoadLibrary=loadLibrary;
-  loadLibrary=async function(){await _origLoadLibrary.apply(this,arguments);loadSealed().then(()=>renderSealed())};
+  loadLibrary=async function(){await _origLoadLibrary.apply(this,arguments);};
 }catch(err){console.error('Sealed patch failed:',err)}
 </script><script>
 /* PATCH: Sealed totes (mirrors the binders flow). Totes are the homepage of the
