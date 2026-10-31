@@ -66,12 +66,33 @@
 <main class="wrap">
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div class="row" style="gap:8px;align-items:center"><h1 style="font-size:1.1rem;margin:0">Binders</h1><button id="toSealedBtn" type="button" style="padding:5px 10px;font-size:.8rem">📦 Sealed collection →</button></div><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div>
 <div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><div class="row" style="margin-top:8px;gap:8px"><button id="dupesBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Duplicates</button><button id="paidBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Price I Paid</button></div><p id="collCount" class="status" aria-live="polite"></p><div id="collList" class="list"></div></div>
 <div class="panel hidden" id="backfillPanel"><p class="sub" style="margin:0 0 8px" id="backfillMsg"></p><button id="backfillBtn" type="button" class="primary" style="width:auto;padding:10px 16px">Fill missing card details</button><p id="backfillStatus" class="status" aria-live="polite" style="margin-top:8px"></p></div>
-<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
+<section id="sealedView" class="hidden">
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div class="row" style="gap:8px;align-items:center"><button id="toBindersBtn" type="button" style="padding:5px 10px;font-size:.8rem">← Binders</button><h1 style="font-size:1.1rem;margin:0">Sealed collection</h1></div></div>
+
+<div class="panel">
+  <p class="sub" style="margin:0 0 8px">Find a sealed product to add to your collection.</p>
+  <form id="sealedSearchForm" class="searchrow" style="margin:0"><input id="sealedQuery" class="field" type="search" placeholder="Search sealed products (e.g. &quot;Evolving Skies booster box&quot;)…" autocomplete="off"><button type="submit">Search</button></form>
+  <p id="sealedSearchStatus" class="status" aria-live="polite"></p>
+  <div id="sealedSearchResults" class="results"></div>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between;align-items:center;gap:10px">
+    <div><strong>Total sealed value</strong><div id="sealedTotal" style="font-size:1.4rem;font-weight:700;color:var(--accent)">…</div><div id="sealedSub" class="note"></div></div>
+    <button id="sealedRefreshBtn" type="button">Refresh sealed prices</button>
+  </div>
+  <p id="sealedStatus" class="status" aria-live="polite"></p>
+</div>
+
+<div id="sealedGrid" class="library-grid"></div>
+<p id="sealedEmpty" class="sub hidden">No sealed products yet. Use the search above to add one.</p>
+</section>
 <section id="cartView" class="hidden">
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="cartBackBtn" type="button" class="icon-row-btn">← Back</button><button id="cartClearBtn" type="button" class="danger" style="margin-left:auto">Clear trip</button></div>
 <h2>Shopping cart</h2>
@@ -115,7 +136,7 @@ function setStatus(id,msg){$(id).textContent=msg}
 function currentBinder(){return binders.find(b=>b.id===activeBinderId)||null}
 function currentPage(){const b=currentBinder();return b?b.pages[activePageIndex]||null:null}
 function normalizePageNumber(n){const x=Number(n);return Number.isInteger(x)&&x>=1?x:1}
-function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.toggle('hidden',logged);$('signOutBtn').classList.toggle('hidden',!logged);if(!logged){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('cartView').classList.add('hidden');$('backfillPanel').classList.add('hidden')}}
+function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.toggle('hidden',logged);$('signOutBtn').classList.toggle('hidden',!logged);if(!logged){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('cartView').classList.add('hidden');$('sealedView').classList.add('hidden');$('backfillPanel').classList.add('hidden')}}
 function showLibrary(){activeBinderId=null;$('binderView').classList.add('hidden');$('cartView').classList.add('hidden');$('libraryView').classList.remove('hidden');renderLibrary();renderCollection();refreshBackfillPanel();refreshCartBadge()}
 function showBinder(id){activeBinderId=id;activePageIndex=0;$('libraryView').classList.add('hidden');$('cartView').classList.add('hidden');$('binderView').classList.remove('hidden');renderBinder()}
 function showCart(){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('cartView').classList.remove('hidden');renderCart()}
@@ -1008,6 +1029,26 @@ document.addEventListener('input',e=>{
 });
   supabaseClient.auth.onAuthStateChange((event,session)=>{if(session?.user){signedInUser=session.user;updateAuthUi();if(event==='INITIAL_SESSION')setTimeout(()=>loadLibrary(),0)}else{signedInUser=null;updateAuthUi()}});
 updateAuthUi();
+
+/* ---------- Sealed collection view switch ---------- */
+function showSealed(){
+  $('libraryView').classList.add('hidden');
+  $('binderView').classList.add('hidden');
+  $('cartView').classList.add('hidden');
+  $('sealedView').classList.remove('hidden');
+  if(typeof renderSealed==='function')renderSealed();
+  if(typeof refreshSealedPrices==='function')refreshSealedPrices(false);
+}
+$('toSealedBtn').onclick=showSealed;
+$('toBindersBtn').onclick=()=>showLibrary();
+
+// Hide the sealed view whenever we leave it
+const _origShowLibrary=showLibrary;
+showLibrary=function(){ $('sealedView').classList.add('hidden'); _origShowLibrary.apply(this,arguments); };
+const _origShowBinder=showBinder;
+showBinder=function(){ $('sealedView').classList.add('hidden'); _origShowBinder.apply(this,arguments); };
+const _origShowCart=showCart;
+showCart=function(){ $('sealedView').classList.add('hidden'); _origShowCart.apply(this,arguments); };
 </script><script>
 /* PATCH: card-number search + your own photos for cards with no TCGdex image.
    To undo: delete this whole <script> block. */
@@ -2392,4 +2433,133 @@ try{
     // normal renderCollection handler already rebuilds the list on input
   });
 }catch(err){console.error('Collection buttons patch failed:',err)}
+</script><script>
+/* PATCH: Sealed collection (TCG API). Needs the #sealedView markup and the
+   navigation wiring from the previous edits. To undo: delete this whole <script>
+   block, delete #sealedView, and remove the sealed-table calls from loadLibrary. */
+try{
+  const SEALED_API_KEY='YOUR_TCGAPI_KEY_HERE'; // <-- paste your tcgapi.dev key here
+  const SEALED_API='https://api.tcgapi.dev/v1';
+  const fmtUSD=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+
+  // Local cache of what the user has saved. Loaded once on sign-in.
+  let sealedItems=[];
+  const sealedCache={}; // product_id -> {price, updated}
+
+  async function loadSealed(){
+    if(!signedInUser)return;
+    const {data,error}=await supabaseClient.from('family_sealed_products').select('*').eq('family_id',signedInUser.id).order('added_at',{ascending:true});
+    if(error){console.warn('Sealed load failed:',error.message);sealedItems=[];return}
+    sealedItems=data||[];
+  }
+
+  function renderSealed(){
+    const grid=$('sealedGrid'),empty=$('sealedEmpty');
+    if(!grid)return;
+    grid.innerHTML='';
+    if(!sealedItems.length){empty.classList.remove('hidden');$('sealedTotal').textContent=fmtUSD(0);$('sealedSub').textContent='0 items';return}
+    empty.classList.add('hidden');
+    let total=0;
+    for(const it of sealedItems){
+      const price=sealedCache[it.id]?.price ?? (it.market_price!=null?Number(it.market_price):null);
+      if(price!=null)total+=price;
+      const wrap=document.createElement('div');wrap.className='tile-wrap';
+      const tile=document.createElement('button');tile.type='button';tile.className='binder-tile';
+      if(it.image_url){const img=document.createElement('img');img.src=it.image_url;img.alt='';img.loading='lazy';tile.append(img)}
+      else{const f=document.createElement('div');f.className='cover-fallback';f.textContent='📦';tile.append(f)}
+      const footer=document.createElement('div');footer.className='tile-footer';
+      const name=document.createElement('span');name.className='tile-name';name.textContent=it.name;
+      const sub=document.createElement('span');sub.className='tile-count';sub.textContent=(it.set_name?it.set_name+' · ':'')+(price!=null?fmtUSD(price):'no price');
+      footer.append(name,sub);tile.append(footer);
+      tile.onclick=()=>openSealedItem(it);
+      const del=document.createElement('button');del.type='button';del.className='tile-delete';del.textContent='×';del.title='Remove';
+      del.onclick=async(ev)=>{ev.stopPropagation();if(!confirm('Remove "'+it.name+'"?'))return;const {error}=await supabaseClient.from('family_sealed_products').delete().eq('id',it.id).eq('family_id',signedInUser.id);if(error){alert(error.message);return}sealedItems=sealedItems.filter(x=>x.id!==it.id);renderSealed();};
+      wrap.append(tile,del);grid.append(wrap);
+    }
+    $('sealedTotal').textContent=fmtUSD(total);
+    $('sealedSub').textContent=sealedItems.length+' item'+(sealedItems.length===1?'':'s')+(sealedCache&&Object.keys(sealedCache).length?' · prices may be stale':'');
+  }
+
+  // -- Search TCG API for sealed products --
+  $('sealedSearchForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const q=$('sealedQuery').value.trim();if(!q)return;
+    const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
+    setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
+    try{
+      const r=await fetch(SEALED_API+'/search?q='+encodeURIComponent(q)+'&game=pokemon&type=sealed',{headers:{'X-API-Key':SEALED_API_KEY}});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const data=await r.json();
+      const results=data.results||data.data||[];
+      if(!results.length){setStatus(statusId,'No sealed products found.');return}
+      setStatus(statusId,'Found '+results.length+' result'+(results.length===1?'':'s')+'. Click one to add it.');
+      for(const p of results){
+        const b=document.createElement('button');b.type='button';b.className='result';
+        const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=p.image_url||p.image||'';
+        img.onerror=()=>{img.style.display='none'};
+        const name=document.createElement('strong');name.textContent=p.name||'Unknown';
+        const detail=document.createElement('small');detail.textContent=[p.set_name,p.product_type].filter(Boolean).join(' · ');
+        b.append(img,name,detail);
+        b.onclick=()=>addSealed(p);
+        $(resultsId).append(b);
+      }
+    }catch(err){console.error(err);setStatus(statusId,'Search failed: '+err.message)}
+  });
+
+  async function addSealed(p){
+    const price=p.market_price!=null?Number(p.market_price):(p.price!=null?Number(p.price):null);
+    const row={family_id:signedInUser.id,product_id:String(p.id||p.product_id||''),name:p.name,set_name:p.set_name||null,image_url:p.image_url||p.image||null,market_price:price,market_updated:price!=null?new Date().toISOString():null};
+    const {data,error}=await supabaseClient.from('family_sealed_products').insert(row).select('*').single();
+    if(error){setStatus('sealedSearchStatus','Could not add: '+error.message);return}
+    sealedItems.push(data);
+    if(price!=null)sealedCache[data.id]={price,updated:Date.now()};
+    renderSealed();
+    setStatus('sealedSearchStatus','Added '+p.name+'.');
+    $('sealedQuery').value='';$('sealedSearchResults').innerHTML='';
+  }
+
+  // -- Refresh prices: one request per saved item --
+  let refreshing=false;
+  async function refreshSealedPrices(force){
+    if(refreshing||!sealedItems.length)return;
+    refreshing=true;
+    $('sealedRefreshBtn').disabled=true;
+    let done=0,ok=0;
+    for(const it of sealedItems){
+      try{
+        const r=await fetch(SEALED_API+'/sealed/'+encodeURIComponent(it.product_id),{headers:{'X-API-Key':SEALED_API_KEY}});
+        if(r.ok){
+          const d=await r.json();
+          const price=d.market_price!=null?Number(d.market_price):(d.price!=null?Number(d.price):null);
+          if(price!=null){
+            sealedCache[it.id]={price,updated:Date.now()};
+            const {error}=await supabaseClient.from('family_sealed_products').update({market_price:price,market_updated:new Date().toISOString()}).eq('id',it.id).eq('family_id',signedInUser.id);
+            if(!error)ok++;
+          }
+        }
+      }catch(e){console.warn('Sealed price refresh failed for',it.name,e)}
+      done++;
+      setStatus('sealedStatus','Refreshing sealed prices… '+done+' of '+sealedItems.length);
+    }
+    refreshing=false;
+    $('sealedRefreshBtn').disabled=false;
+    renderSealed();
+    setStatus('sealedStatus','Sealed prices updated ('+ok+' of '+sealedItems.length+').');
+  }
+  $('sealedRefreshBtn').onclick=()=>refreshSealedPrices(true);
+
+  // Optional: opening a sealed item shows a small detail modal
+  function openSealedItem(it){
+    const price=sealedCache[it.id]?.price ?? (it.market_price!=null?Number(it.market_price):null);
+    alert(it.name+'\n'+(it.set_name||'')+'\n'+(price!=null?fmtUSD(price):'No price'));
+  }
+
+  // Load when the library appears after sign-in
+  const _origShowLibrary=showLibrary;
+  showLibrary=function(){_origShowLibrary.apply(this,arguments);loadSealed().then(()=>{if(!$('sealedView').classList.contains('hidden'))renderSealed()})};
+
+  // First load after sign-in
+  const _origLoadLibrary=loadLibrary;
+  loadLibrary=async function(){await _origLoadLibrary.apply(this,arguments);loadSealed().then(()=>renderSealed())};
+}catch(err){console.error('Sealed patch failed:',err)}
 </script></body></html>
