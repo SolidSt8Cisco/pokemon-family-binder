@@ -77,7 +77,7 @@
 
 <div class="panel">
   <p class="sub" style="margin:0 0 8px">Find a sealed product to add to your collection.</p>
-  <form id="sealedSearchForm" class="searchrow" style="margin:0"><input id="sealedQuery" class="field" type="search" placeholder="Search sealed products (e.g. &quot;Evolving Skies booster box&quot;)…" autocomplete="off"><button type="submit">Search</button></form>
+  <div class="searchrow" style="margin:0"><input id="sealedQuery" class="field" type="search" placeholder="Search sealed products (e.g. &quot;Evolving Skies booster box&quot;)…" autocomplete="off"><button id="sealedSearchBtn" type="button">Search</button></div>
   <p id="sealedSearchStatus" class="status" aria-live="polite"></p>
   <div id="sealedSearchResults" class="results"></div>
 </div>
@@ -2481,8 +2481,7 @@ try{
   }
 
   // -- Search TCG API for sealed products --
-  $('sealedSearchForm').addEventListener('submit',async e=>{
-    e.preventDefault();
+  const runSealedSearch=async()=>{
     const q=$('sealedQuery').value.trim();if(!q)return;
     const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
@@ -2508,7 +2507,9 @@ try{
         $(resultsId).append(b);
       }
     }catch(err){console.error(err);setStatus(statusId,'Search failed: '+err.message)}
-  });
+  };
+  $('sealedSearchBtn').onclick=runSealedSearch;
+  $('sealedQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runSealedSearch();}});
 
   async function addSealed(p){
     const price=p.market_price!=null?Number(p.market_price):(p.price!=null?Number(p.price):null);
