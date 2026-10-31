@@ -2567,7 +2567,7 @@ try{
     if(toteId)await loadSealed(toteId);
     if(refreshing||!sealedItems.length)return;
     refreshing=true;
-    $('sealedRefreshBtn').disabled=true;
+    if($('toteRefreshBtn'))$('toteRefreshBtn').disabled=true;
     let done=0,ok=0;
     for(const it of sealedItems){
       try{
@@ -2590,7 +2590,7 @@ try{
       setStatus('sealedStatus','Refreshing sealed prices… '+done+' of '+sealedItems.length);
     }
     refreshing=false;
-    $('sealedRefreshBtn').disabled=false;
+    if($('toteRefreshBtn'))$('toteRefreshBtn').disabled=false;
     renderSealed();
     setStatus('sealedStatus','Sealed prices updated ('+ok+' of '+sealedItems.length+').');
   }
