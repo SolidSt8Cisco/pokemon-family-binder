@@ -2574,9 +2574,6 @@ try{
       }
     }catch(err){console.error(err);setStatus(statusId,'Search failed: '+err.message)}
   };
-  $('sealedSearchBtn').onclick=runSealedSearch;
-  $('sealedQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runSealedSearch();}});
-
   async function addSealed(p){
     const price=p.market_price!=null?Number(p.market_price):(p.price!=null?Number(p.price):null);
     const row={family_id:signedInUser.id,product_id:String(p.id||p.product_id||''),name:p.name,set_name:p.set_name||null,image_url:p.image_url||p.image||null,market_price:price,market_updated:price!=null?new Date().toISOString():null};
@@ -2622,8 +2619,6 @@ try{
     renderSealed();
     setStatus('sealedStatus','Sealed prices updated ('+ok+' of '+sealedItems.length+').');
   }
-  $('sealedRefreshBtn').onclick=()=>refreshSealedPrices(true);
-
   // Optional: opening a sealed item shows a small detail modal
   function openSealedItem(it){
     const price=sealedCache[it.id]?.price ?? (it.market_price!=null?Number(it.market_price):null);
@@ -2639,7 +2634,6 @@ try{
   loadLibrary=async function(){await _origLoadLibrary.apply(this,arguments);loadSealed().then(()=>renderSealed())};
 }catch(err){console.error('Sealed patch failed:',err)}
 </script><script>
-<script>
 /* PATCH: Sealed totes (mirrors the binders flow). Totes are the homepage of the
    Sealed view. Click a tote to open it; sealed products live inside each tote.
    Needs family_sealed_totes and family_sealed_products.tote_id. */
