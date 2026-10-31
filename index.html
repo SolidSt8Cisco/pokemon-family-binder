@@ -84,7 +84,7 @@
 
 <section id="toteDetailView" class="hidden">
 <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
-  <button id="toSealedBtn" type="button" style="padding:5px 10px;font-size:.8rem">← All totes</button>
+  <button id="backToTotesBtn" type="button" style="padding:5px 10px;font-size:.8rem">← All totes</button>
   <div class="row icon-row">
     <button id="renameToteBtn" type="button" style="padding:5px 10px;font-size:.8rem">Rename</button>
     <button id="coverToteBtn" type="button" style="padding:5px 10px;font-size:.8rem">Change picture</button>
@@ -2686,7 +2686,7 @@ try{
     $('sealedView').classList.remove('hidden');
     loadTotes();
   }
-  $('toSealedBtn').onclick=backToTotes;
+  $('backToTotesBtn').onclick=backToTotes;
 
   // -------- name modal (create / rename) --------
   function openToteNameModal(mode,initial){
@@ -2800,6 +2800,7 @@ try{
     _origShowSealed.apply(this,arguments);
     loadTotes();
   };
+  $('toSealedBtn').onclick=showSealed;
   const _origUpdateAuthUi=updateAuthUi;
   updateAuthUi=function(){
     _origUpdateAuthUi.apply(this,arguments);
