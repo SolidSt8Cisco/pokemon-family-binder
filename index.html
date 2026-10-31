@@ -159,10 +159,10 @@ function setStatus(id,msg){$(id).textContent=msg}
 function currentBinder(){return binders.find(b=>b.id===activeBinderId)||null}
 function currentPage(){const b=currentBinder();return b?b.pages[activePageIndex]||null:null}
 function normalizePageNumber(n){const x=Number(n);return Number.isInteger(x)&&x>=1?x:1}
-function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.toggle('hidden',logged);$('signOutBtn').classList.toggle('hidden',!logged);if(!logged){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('cartView').classList.add('hidden');$('sealedView').classList.add('hidden');$('totesView').classList.add('hidden');$('backfillPanel').classList.add('hidden')}}
+function updateAuthUi(){const logged=!!signedInUser;$('authPanel').classList.toggle('hidden',logged);$('signOutBtn').classList.toggle('hidden',!logged);if(!logged){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('cartView').classList.add('hidden');$('sealedView').classList.add('hidden');$('toteDetailView').classList.add('hidden');$('backfillPanel').classList.add('hidden')}}
 function showLibrary(){activeBinderId=null;$('binderView').classList.add('hidden');$('cartView').classList.add('hidden');$('libraryView').classList.remove('hidden');renderLibrary();renderCollection();refreshBackfillPanel();refreshCartBadge()}
-function showBinder(id){activeBinderId=id;activePageIndex=0;$('libraryView').classList.add('hidden');$('cartView').classList.add('hidden');$('sealedView').classList.add('hidden');$('totesView').classList.add('hidden');$('binderView').classList.remove('hidden');renderBinder()}
-function showCart(){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('sealedView').classList.add('hidden');$('totesView').classList.add('hidden');$('cartView').classList.remove('hidden');renderCart()}
+function showBinder(id){activeBinderId=id;activePageIndex=0;$('libraryView').classList.add('hidden');$('cartView').classList.add('hidden');$('sealedView').classList.add('hidden');$('toteDetailView').classList.add('hidden');$('binderView').classList.remove('hidden');renderBinder()}
+function showCart(){$('libraryView').classList.add('hidden');$('binderView').classList.add('hidden');$('sealedView').classList.add('hidden');$('toteDetailView').classList.add('hidden');$('cartView').classList.remove('hidden');renderCart()}
 
 /* ---------- Collection list ---------- */
 function renderCollection(){
@@ -1058,10 +1058,9 @@ function showSealed(){
   $('libraryView').classList.add('hidden');
   $('binderView').classList.add('hidden');
   $('cartView').classList.add('hidden');
-  $('totesView').classList.add('hidden');
+  $('toteDetailView').classList.add('hidden');
   $('sealedView').classList.remove('hidden');
-  if(typeof renderSealed==='function')renderSealed();
-  if(typeof refreshSealedPrices==='function')refreshSealedPrices(false);
+  if(typeof loadTotes==='function')loadTotes();
 }
 $('toSealedBtn').onclick=showSealed;
 $('toBindersBtn').onclick=()=>showLibrary();
