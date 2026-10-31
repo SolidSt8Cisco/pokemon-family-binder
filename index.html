@@ -2438,8 +2438,7 @@ try{
    navigation wiring from the previous edits. To undo: delete this whole <script>
    block, delete #sealedView, and remove the sealed-table calls from loadLibrary. */
 try{
-  const SEALED_API_KEY=tcg_live_52b10bc896699902908fb0da1357d3e2ca9cd9a4; // <-- paste your tcgapi.dev key here
-  const SEALED_API='https://api.tcgapi.dev/v1';
+  const SEALED_API='https://whbuikfheckjebgeglpu.supabase.co/functions/v1/sealed-proxy';
   const fmtUSD=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 
   // Local cache of what the user has saved. Loaded once on sign-in.
@@ -2486,7 +2485,8 @@ try{
     const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
     try{
-      const r=await fetch(SEALED_API+'/search?q='+encodeURIComponent(q)+'&game=pokemon&type=sealed',{headers:{'X-API-Key':SEALED_API_KEY}});
+      const upstreamQuery='q='+encodeURIComponent(q)+'&game=pokemon&type=sealed';
+      const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
       if(!r.ok){
         let detail='';
         try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
@@ -2532,7 +2532,7 @@ try{
     let done=0,ok=0;
     for(const it of sealedItems){
       try{
-        const r=await fetch(SEALED_API+'/sealed/'+encodeURIComponent(it.product_id),{headers:{'X-API-Key':SEALED_API_KEY}});
+        const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/sealed/'+it.product_id));
         if(r.ok){
           const d=await r.json();
           const price=d.market_price!=null?Number(d.market_price):(d.price!=null?Number(d.price):null);
