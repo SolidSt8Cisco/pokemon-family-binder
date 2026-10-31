@@ -2839,16 +2839,38 @@ try{
     const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
     try{
-      const upstreamQuery='q='+encodeURIComponent(q)+'&game=pokemon';
-      const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
-      if(!r.ok){
-        let detail='';
-        try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
-        throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
+      // TCG API doesn't support OR/boolean syntax — it matches against clean_name.
+      // So: search each word separately, merge, and keep only Sealed Products.
+      const fetchSearch=async(term)=>{
+        const upstreamQuery='q='+encodeURIComponent(term)+'&game=pokemon';
+        const r=await fetch(window.SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
+        if(!r.ok){
+          let detail='';
+          try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
+          throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
+        }
+        const data=await r.json();
+        const all=data.data||data.results||[];
+        return all.filter(p=>p.product_type==='Sealed Products');
+      };
+
+      // Pass 1: whole phrase. Pass 2 (only if empty): each word separately, merged.
+      let results=await fetchSearch(q);
+      if(!results.length){
+        const terms=q.split(/\s+/).filter(Boolean);
+        if(terms.length>1){
+          const seen=new Set();
+          const merged=[];
+          for(const term of terms){
+            let part=[];
+            try{part=await fetchSearch(term);}catch(e){console.warn('Search term failed:',term,e);continue}
+            for(const p of part){
+              if(!seen.has(p.id)){seen.add(p.id);merged.push(p)}
+            }
+          }
+          results=merged;
+        }
       }
-      const data=await r.json();
-      const all=data.data||data.results||[];
-      const results=all.filter(p=>p.product_type==='Sealed Products');
       if(!results.length){setStatus(statusId,'No sealed products found for "'+q+'".');return}
       setStatus(statusId,'Found '+results.length+' result'+(results.length===1?'':'s')+'. Click one to add it to this tote.');
       for(const p of results){
