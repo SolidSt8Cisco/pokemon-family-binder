@@ -2488,7 +2488,11 @@ try{
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
     try{
       const r=await fetch(SEALED_API+'/search?q='+encodeURIComponent(q)+'&game=pokemon&type=sealed',{headers:{'X-API-Key':SEALED_API_KEY}});
-      if(!r.ok)throw new Error('HTTP '+r.status);
+      if(!r.ok){
+        let detail='';
+        try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
+        throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
+      }
       const data=await r.json();
       const results=data.results||data.data||[];
       if(!results.length){setStatus(statusId,'No sealed products found.');return}
