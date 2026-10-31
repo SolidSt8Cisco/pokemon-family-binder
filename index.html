@@ -2485,7 +2485,7 @@ try{
     const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
     try{
-      const upstreamQuery='q='+encodeURIComponent(q)+'&game=pokemon&type=sealed';
+      const upstreamQuery='q='+encodeURIComponent(q)+'&game=pokemon';
       const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
       if(!r.ok){
         let detail='';
@@ -2493,8 +2493,9 @@ try{
         throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
       }
       const data=await r.json();
-      const results=data.results||data.data||[];
-      if(!results.length){setStatus(statusId,'No sealed products found.');return}
+      const all=data.data||data.results||[];
+      const results=all.filter(p=>p.product_type==='Sealed Products');
+      if(!results.length){setStatus(statusId,'No sealed products found for "'+q+'".');return}
       setStatus(statusId,'Found '+results.length+' result'+(results.length===1?'':'s')+'. Click one to add it.');
       for(const p of results){
         const b=document.createElement('button');b.type='button';b.className='result';
@@ -2532,10 +2533,14 @@ try{
     let done=0,ok=0;
     for(const it of sealedItems){
       try{
-        const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/sealed/'+it.product_id));
+        const upstreamQuery='q='+encodeURIComponent(it.name)+'&game=pokemon';
+        const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
         if(r.ok){
           const d=await r.json();
-          const price=d.market_price!=null?Number(d.market_price):(d.price!=null?Number(d.price):null);
+          const list=(d.data||[]).filter(p=>p.product_type==='Sealed Products');
+          // Prefer an exact id match; fall back to the first name match
+          const match=list.find(p=>String(p.id)===String(it.product_id)) || list[0];
+          const price=match&&match.market_price!=null?Number(match.market_price):null;
           if(price!=null){
             sealedCache[it.id]={price,updated:Date.now()};
             const {error}=await supabaseClient.from('family_sealed_products').update({market_price:price,market_updated:new Date().toISOString()}).eq('id',it.id).eq('family_id',signedInUser.id);
