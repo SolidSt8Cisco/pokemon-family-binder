@@ -2461,6 +2461,7 @@ try{
    block, delete #sealedView, and remove the sealed-table calls from loadLibrary. */
 try{
   const SEALED_API='https://whbuikfheckjebgeglpu.supabase.co/functions/v1/sealed-proxy';
+  window.SEALED_API=SEALED_API;
   const fmtUSD=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 
   // Local cache of what the user has saved. Loaded once on sign-in.
@@ -2530,7 +2531,7 @@ try{
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
     try{
       const upstreamQuery='q='+encodeURIComponent(q)+'&game=pokemon';
-      const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
+      const r=await fetch(window.SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
       if(!r.ok){
         let detail='';
         try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
