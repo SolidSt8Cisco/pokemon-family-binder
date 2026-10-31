@@ -2897,6 +2897,12 @@ try{
   };
   $('sealedSearchBtn').onclick=runSealedSearch;
   $('sealedQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runSealedSearch();}});
+    $('sealedQuery').addEventListener('input',e=>{
+    if(!e.target.value.trim()){
+      $('sealedSearchResults').innerHTML='';
+      setStatus('sealedSearchStatus','');
+    }
+  });
 
   async function addSealedToActiveTote(p){
     if(!activeToteId){setStatus('sealedSearchStatus','Open a tote first.');return}
