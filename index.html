@@ -2599,17 +2599,27 @@ try{
     const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
     setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
     try{
-      const terms=q.split(/\s+/).filter(Boolean).map(t=>t.replace(/"/g,''));
-      const upstreamQuery='q='+encodeURIComponent(terms.join(' OR '))+'&game=pokemon';
-      const r=await fetch(window.SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
-      if(!r.ok){
-        let detail='';
-        try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
-        throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
+      const fetchSearch=async(term)=>{
+        const upstreamQuery='q='+encodeURIComponent(term)+'&game=pokemon';
+        const r=await fetch(window.SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
+        if(!r.ok){
+          let detail='';
+          try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
+          throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
+        }
+        const data=await r.json();
+        const all=data.data||data.results||[];
+        return all.filter(p=>p.product_type==='Sealed Products');
+      };
+
+      // Pass 1 — exact phrase as typed. Pass 2 — split into OR'd terms.
+      let results=await fetchSearch(q);
+      if(!results.length){
+        const terms=q.split(/\s+/).filter(Boolean).map(t=>t.replace(/"/g,''));
+        if(terms.length>1){
+          results=await fetchSearch(terms.join(' OR '));
+        }
       }
-      const data=await r.json();
-      const all=data.data||data.results||[];
-      const results=all.filter(p=>p.product_type==='Sealed Products');
       if(!results.length){setStatus(statusId,'No sealed products found for "'+q+'".');return}
       setStatus(statusId,'Found '+results.length+' result'+(results.length===1?'':'s')+'. Click one to add it.');
       for(const p of results){
