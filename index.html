@@ -73,25 +73,48 @@
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
 <section id="sealedView" class="hidden">
-<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div class="row" style="gap:8px;align-items:center"><button id="toBindersBtn" type="button" style="padding:5px 10px;font-size:.8rem">← Binders</button><h1 style="font-size:1.1rem;margin:0">Sealed collection</h1><button id="toTotesBtn" type="button" style="padding:5px 10px;font-size:.8rem">📦 Sealed totes →</button></div></div>
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  <div class="row" style="gap:8px;align-items:center">
+    <button id="toBindersBtn" type="button" style="padding:5px 10px;font-size:.8rem">← Binders</button>
+    <h1 style="font-size:1.1rem;margin:0">Sealed collection</h1>
+  </div>
+  <button id="cartOpenBtn2" type="button">🛒 Shopping cart <span id="cartCountBadge2" class="badge" style="margin-left:6px">0</span></button>
+</div>
+<div id="totesGrid" class="library-grid"></div>
+<p id="totesStatus" class="status" aria-live="polite"></p>
+</section>
 
-<div class="panel">
-  <p class="sub" style="margin:0 0 8px">Find a sealed product to add to your collection.</p>
-  <div class="searchrow" style="margin:0"><input id="sealedQuery" class="field" type="search" placeholder="Search sealed products (e.g. &quot;Evolving Skies booster box&quot;)…" autocomplete="off"><button id="sealedSearchBtn" type="button">Search</button></div>
+<section id="toteDetailView" class="hidden">
+<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+  <button id="toSealedBtn" type="button" style="padding:5px 10px;font-size:.8rem">← All totes</button>
+  <div class="row icon-row">
+    <button id="renameToteBtn" type="button" style="padding:5px 10px;font-size:.8rem">Rename</button>
+    <button id="coverToteBtn" type="button" style="padding:5px 10px;font-size:.8rem">Change picture</button>
+    <input id="coverToteFile" type="file" accept="image/*" class="hidden">
+  </div>
+</div>
+<div class="row" style="gap:12px;align-items:center">
+  <img id="activeToteCover" class="cover-preview hidden" alt="Tote cover">
+  <div class="grow">
+    <div class="row" style="gap:8px;align-items:center">
+      <h2 id="activeToteName">Tote</h2>
+      <button id="toteRefreshBtn" type="button" style="padding:4px 10px;font-size:.8rem">Refresh prices</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:12px">
+  <div class="searchrow" style="margin:0">
+    <input id="sealedQuery" class="field" type="search" placeholder="Search sealed products to add to this tote…" autocomplete="off">
+    <button id="sealedSearchBtn" type="button">Search</button>
+  </div>
   <p id="sealedSearchStatus" class="status" aria-live="polite"></p>
   <div id="sealedSearchResults" class="results"></div>
 </div>
 
-<div class="panel">
-  <div class="row" style="justify-content:space-between;align-items:center;gap:10px">
-    <div><strong>Total sealed value</strong><div id="sealedTotal" style="font-size:1.4rem;font-weight:700;color:var(--accent)">…</div><div id="sealedSub" class="note"></div></div>
-    <button id="sealedRefreshBtn" type="button">Refresh sealed prices</button>
-  </div>
-  <p id="sealedStatus" class="status" aria-live="polite"></p>
-</div>
-
 <div id="sealedGrid" class="library-grid"></div>
-<p id="sealedEmpty" class="sub hidden">No sealed products yet. Use the search above to add one.</p>
+<p id="sealedEmpty" class="sub hidden">No sealed products in this tote yet. Use the search above to add one.</p>
+<p id="sealedStatus" class="status" aria-live="polite"></p>
 </section>
 
 <section id="totesView" class="hidden">
@@ -124,6 +147,7 @@
 <div class="pagebar"><div class="group"><button id="prevPageBtn" type="button">← Previous</button><button id="nextPageBtn" type="button">Next →</button></div><strong id="pageLabel">Page 1 of 1</strong></div><section class="grid" id="cardGrid" aria-label="Nine card binder slots"></section><p id="binderStatus" class="status" aria-live="polite"></p></section>
 <div class="row" style="justify-content:center;gap:10px;margin-top:32px;padding-top:16px;border-top:1px solid var(--line)"><button id="exportBtn" type="button">Export backup</button><button id="importBtn" type="button">Import backup</button><input id="importFile" type="file" accept=".json,application/json" class="hidden"><button id="signOutBtn" type="button" class="hidden">Sign out</button></div>
 </main>
+<div class="modal" id="toteNameModal" role="dialog" aria-modal="true"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="toteNameTitle">Tote name</h2><button class="close" id="closeToteNameBtn" aria-label="Close">×</button></div><form id="toteNameForm" style="margin-top:12px"><input id="toteNameInput" class="field" type="text" maxlength="80" autocomplete="off" required><p id="toteNameError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="toteNameCancelBtn">Cancel</button><button type="submit" id="toteNameSaveBtn" class="primary" style="width:auto;padding:10px 18px">Save</button></div></form></div></div>
 <div class="modal" id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"><div class="dialog" style="width:min(520px,100%);text-align:center"><div class="dialoghead"><h2 id="cardModalTitle">Card</h2><button class="close" id="closeCardBtn" aria-label="Close">×</button></div><img id="cardModalImg" alt="" style="width:100%;max-height:70dvh;object-fit:contain;border-radius:10px;background:#111a26;margin-top:12px"><p id="cardModalMeta" class="note" style="margin-top:10px"></p></div></div>
 <div class="modal" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="nameModalTitle">Binder name</h2><button class="close" id="closeNameBtn" aria-label="Close">×</button></div><form id="nameForm" style="margin-top:12px"><input id="nameInput" class="field" type="text" maxlength="80" autocomplete="off" required><p id="nameError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="nameCancelBtn">Cancel</button><button type="submit" id="nameSaveBtn" class="primary" style="width:auto;padding:10px 18px">Save</button></div></form></div></div>
 <div class="modal" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="deleteModalTitle">Delete binder</h2><button class="close" id="closeDeleteBtn" aria-label="Close">×</button></div><p id="deleteModalText" class="sub" style="margin-top:12px"></p><p id="deleteError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="deleteCancelBtn">Cancel</button><button type="button" id="deleteConfirmBtn" class="danger">Delete binder</button></div></div></div>
@@ -2469,18 +2493,25 @@ try{
   let sealedItems=[];
   const sealedCache={}; // product_id -> {price, updated}
 
-  async function loadSealed(){
+  async function loadSealed(toteId){
     if(!signedInUser)return;
-    const {data,error}=await supabaseClient.from('family_sealed_products').select('*').eq('family_id',signedInUser.id).order('added_at',{ascending:true});
+    let q=supabaseClient.from('family_sealed_products').select('*').eq('family_id',signedInUser.id);
+    if(toteId)q=q.eq('tote_id',toteId);
+    const {data,error}=await q.order('added_at',{ascending:true});
     if(error){console.warn('Sealed load failed:',error.message);sealedItems=[];return}
     sealedItems=data||[];
+  }
+  // alias used by the totes patch
+  async function loadSealedProducts(toteId){
+    await loadSealed(toteId);
+    if(typeof renderSealed==='function')renderSealed();
   }
 
   function renderSealed(){
     const grid=$('sealedGrid'),empty=$('sealedEmpty');
     if(!grid)return;
     grid.innerHTML='';
-    if(!sealedItems.length){empty.classList.remove('hidden');$('sealedTotal').textContent=fmtUSD(0);$('sealedSub').textContent='0 items';return}
+    if(!sealedItems.length){empty.classList.remove('hidden');return}
     empty.classList.add('hidden');
     let total=0;
     for(const it of sealedItems){
@@ -2511,8 +2542,6 @@ try{
       del.onclick=async(ev)=>{ev.stopPropagation();if(!confirm('Remove "'+it.name+'"?'))return;const {error}=await supabaseClient.from('family_sealed_products').delete().eq('id',it.id).eq('family_id',signedInUser.id);if(error){alert(error.message);return}sealedItems=sealedItems.filter(x=>x.id!==it.id);renderSealed();};
       wrap.append(tile,del);grid.append(wrap);
     }
-    $('sealedTotal').textContent=fmtUSD(total);
-    $('sealedSub').textContent=sealedItems.length+' item'+(sealedItems.length===1?'':'s')+(sealedCache&&Object.keys(sealedCache).length?' · prices may be stale':'');
   }
 
   // -- Search TCG API for sealed products --
@@ -2562,7 +2591,8 @@ try{
 
   // -- Refresh prices: one request per saved item --
   let refreshing=false;
-  async function refreshSealedPrices(force){
+  async function refreshSealedPrices(toteId){
+    if(toteId)await loadSealed(toteId);
     if(refreshing||!sealedItems.length)return;
     refreshing=true;
     $('sealedRefreshBtn').disabled=true;
@@ -2609,140 +2639,201 @@ try{
   loadLibrary=async function(){await _origLoadLibrary.apply(this,arguments);loadSealed().then(()=>renderSealed())};
 }catch(err){console.error('Sealed patch failed:',err)}
 </script><script>
-/* PATCH: Sealed totes — create a tote, give it a cover image and a name, and assign
-   sealed products to it. Count of products per tote is derived from tote_id.
-   Needs the family_sealed_totes table and the tote_id column. */
+<script>
+/* PATCH: Sealed totes (mirrors the binders flow). Totes are the homepage of the
+   Sealed view. Click a tote to open it; sealed products live inside each tote.
+   Needs family_sealed_totes and family_sealed_products.tote_id. */
 try{
   let totes=[];
-  let toteEditingId=null;
+  let activeToteId=null;
+  let toteModalMode=null; // 'create' | 'rename'
 
-  // -------- data --------
+  const curTote=()=>totes.find(t=>t.id===activeToteId)||null;
+
+  // -------- load + render totes homepage --------
   async function loadTotes(){
     if(!signedInUser)return;
-    const [{data:toteRows,error:tErr},{data:itemRows,error:iErr}]=await Promise.all([
+    const [{data:tRows,error:tErr},{data:iRows,error:iErr}]=await Promise.all([
       supabaseClient.from('family_sealed_totes').select('*').eq('family_id',signedInUser.id).order('sort_order').order('created_at'),
       supabaseClient.from('family_sealed_products').select('id,tote_id').eq('family_id',signedInUser.id)
     ]);
     if(tErr){setStatus('totesStatus','Could not load totes: '+tErr.message);return}
     if(iErr){setStatus('totesStatus','Could not load items: '+iErr.message);return}
     const counts={};
-    for(const r of itemRows||[])if(r.tote_id)counts[r.tote_id]=(counts[r.tote_id]||0)+1;
-    totes=(toteRows||[]).map(t=>({...t,count:counts[t.id]||0}));
+    for(const r of iRows||[])if(r.tote_id)counts[r.tote_id]=(counts[r.tote_id]||0)+1;
+    totes=(tRows||[]).map(t=>({...t,count:counts[t.id]||0}));
     renderTotes();
   }
 
-  // -------- render --------
   function renderTotes(){
     const grid=$('totesGrid');if(!grid)return;
     grid.innerHTML='';
     for(const t of totes){
       const wrap=document.createElement('div');wrap.className='tile-wrap';
       const tile=document.createElement('button');tile.type='button';tile.className='binder-tile';
+      tile.setAttribute('aria-label','Open '+t.name);
       if(t.cover_image){const img=document.createElement('img');img.src=t.cover_image;img.alt='';img.loading='lazy';tile.append(img)}
       else{const f=document.createElement('div');f.className='cover-fallback';f.textContent='📦';tile.append(f)}
       const footer=document.createElement('div');footer.className='tile-footer';
       const cnt=document.createElement('span');cnt.className='tile-count';cnt.textContent=t.count+' item'+(t.count===1?'':'s');
       const nm=document.createElement('span');nm.className='tile-name';nm.textContent=t.name;
       footer.append(cnt,nm);tile.append(footer);
-      tile.onclick=()=>openToteEditor(t);
+      tile.onclick=()=>showToteDetail(t.id);
       const del=document.createElement('button');del.type='button';del.className='tile-delete';del.textContent='×';del.title='Delete tote';
       del.onclick=async(ev)=>{
         ev.stopPropagation();
-        if(!confirm('Delete tote "'+t.name+'"? The sealed products inside will stay in your collection, just unassigned.'))return;
+        if(!confirm('Delete tote "'+t.name+'"? Sealed products inside will stay in your collection, just unassigned.'))return;
         const {error}=await supabaseClient.from('family_sealed_totes').delete().eq('id',t.id).eq('family_id',signedInUser.id);
         if(error){setStatus('totesStatus','Delete failed: '+error.message);return}
         totes=totes.filter(x=>x.id!==t.id);
         renderTotes();
-        setStatus('totesStatus','Deleted tote "'+t.name+'".');
       };
       wrap.append(tile,del);grid.append(wrap);
     }
     const add=document.createElement('button');add.type='button';add.className='binder-tile add-tile';
     add.innerHTML='<span class="plus" aria-hidden="true">+</span><span class="add-label">Add tote</span>';
-    add.onclick=()=>openToteEditor(null);
+    add.onclick=()=>openToteNameModal('create','New sealed tote');
     grid.append(add);
-    setStatus('totesStatus','');
   }
 
-  // -------- tote editor (create / rename / assign) --------
-  function openToteEditor(t){
-    toteEditingId=t?t.id:null;
-    const isNew=!t;
-    const html=`
-      <div class="modal open" id="toteEditorModal" role="dialog" aria-modal="true">
-        <div class="dialog" style="width:min(560px,100%)">
-          <div class="dialoghead"><h2>${isNew?'New sealed tote':'Edit tote'}</h2><button class="close" id="toteEditorClose" aria-label="Close">×</button></div>
-          <form id="toteEditorForm" style="margin-top:12px">
-            <label class="note">Tote name</label>
-            <input id="toteName" class="field" type="text" maxlength="80" required value="${t?escapeHtml(t.name):''}">
-            <div class="row" style="justify-content:space-between;margin-top:12px">
-              <label class="note">Cover image</label>
-              <button type="button" id="toteImgBtn" style="padding:5px 10px;font-size:.8rem">${t&&t.cover_image?'Change image':'Upload image'}</button>
-            </div>
-            <div id="toteImgPreview" class="note" style="margin-top:6px">${t&&t.cover_image?'✓ image set':'no image'}</div>
-            <input id="toteImgFile" type="file" accept="image/*" class="hidden">
-            ${t?`<p class="note" style="margin-top:12px">${t.count} sealed item${t.count===1?'':'s'} in this tote. Manage items from the Sealed collection page.</p>`:''}
-            <p class="status" id="toteMsg"></p>
-            <div class="row" style="justify-content:flex-end;margin-top:8px">
-              <button type="button" id="toteCancel">Cancel</button>
-              <button type="submit" class="primary" id="toteSave" style="width:auto;padding:10px 18px">Save</button>
-            </div>
-          </form>
-        </div>
-      </div>`;
-    document.body.insertAdjacentHTML('beforeend',html);
-    const close=()=>{$('toteEditorModal').remove()};
-    $('toteEditorClose').onclick=close;
-    $('toteCancel').onclick=close;
-    $('toteImgBtn').onclick=()=>$('toteImgFile').click();
-    let newImage=null;
-    $('toteImgFile').onchange=async e=>{
-      const file=e.target.files?.[0];e.target.value='';
-      if(!file)return;
-      $('toteImgPreview').textContent='Uploading…';
-      try{
-        const url=await uploadCardPhoto(file);
-        newImage=url;
-        $('toteImgPreview').textContent='✓ new image ready';
-      }catch(err){
-        $('toteImgPreview').textContent='Upload failed: '+err.message;
-      }
-    };
-    $('toteEditorForm').addEventListener('submit',async e=>{
-      e.preventDefault();
-      const name=$('toteName').value.trim();
-      if(!name){$('toteMsg').textContent='Please enter a name.';return}
-      $('toteSave').disabled=true;
-      try{
-        if(toteEditingId){
-          const patch={name};
-          if(newImage)patch.cover_image=newImage;
-          const {error}=await supabaseClient.from('family_sealed_totes').update(patch).eq('id',toteEditingId).eq('family_id',signedInUser.id);
-          if(error)throw error;
-          const t2=totes.find(x=>x.id===toteEditingId);
-          if(t2){t2.name=name;if(newImage)t2.cover_image=newImage}
-        }else{
-          const {data,error}=await supabaseClient.from('family_sealed_totes').insert({family_id:signedInUser.id,name,cover_image:newImage||null,sort_order:totes.length}).select('*').single();
-          if(error)throw error;
-          totes.push({...data,count:0});
-        }
-        close();
+  // -------- tote detail (products inside) --------
+  function showToteDetail(id){
+    activeToteId=id;
+    const t=curTote();if(!t)return;
+    $('sealedView').classList.add('hidden');
+    $('toteDetailView').classList.remove('hidden');
+    $('activeToteName').textContent=t.name;
+    $('activeToteCover').classList.toggle('hidden',!t.cover_image);
+    if(t.cover_image)$('activeToteCover').src=t.cover_image;
+    $('sealedQuery').value='';
+    $('sealedSearchResults').innerHTML='';
+    $('sealedSearchStatus').textContent='';
+    if(typeof loadSealedProducts==='function')loadSealedProducts(id);
+  }
+  function backToTotes(){
+    activeToteId=null;
+    $('toteDetailView').classList.add('hidden');
+    $('sealedView').classList.remove('hidden');
+    loadTotes();
+  }
+  $('toSealedBtn').onclick=backToTotes;
+
+  // -------- name modal (create / rename) --------
+  function openToteNameModal(mode,initial){
+    toteModalMode=mode;
+    $('toteNameTitle').textContent=mode==='create'?'Name this tote':'Rename tote';
+    $('toteNameInput').value=initial||'';
+    $('toteNameError').textContent='';
+    $('toteNameModal').classList.add('open');
+    setTimeout(()=>{$('toteNameInput').focus();$('toteNameInput').select()},0);
+  }
+  function closeToteNameModal(){$('toteNameModal').classList.remove('open')}
+  $('closeToteNameBtn').onclick=closeToteNameModal;
+  $('toteNameCancelBtn').onclick=closeToteNameModal;
+  $('toteNameForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const clean=$('toteNameInput').value.trim();
+    if(!clean){$('toteNameError').textContent='Please enter a name.';return}
+    $('toteNameSaveBtn').disabled=true;
+    try{
+      if(toteModalMode==='create'){
+        const {data,error}=await supabaseClient.from('family_sealed_totes').insert({family_id:signedInUser.id,name:clean,sort_order:totes.length}).select('*').single();
+        if(error)throw error;
+        totes.push({...data,count:0});
         renderTotes();
-        setStatus('totesStatus','Saved.');
-      }catch(err){
-        $('toteMsg').textContent='Save failed: '+err.message;
-      }finally{
-        $('toteSave').disabled=false;
+      }else if(toteModalMode==='rename'&&activeToteId){
+        const {error}=await supabaseClient.from('family_sealed_totes').update({name:clean}).eq('id',activeToteId).eq('family_id',signedInUser.id);
+        if(error)throw error;
+        const t=curTote();if(t)t.name=clean;
+        $('activeToteName').textContent=clean;
+        renderTotes();
       }
-    });
+      closeToteNameModal();
+    }catch(err){$('toteNameError').textContent='Save failed: '+err.message}
+    finally{$('toteNameSaveBtn').disabled=false}
+  });
+
+  // -------- rename + cover in the detail view --------
+  $('renameToteBtn').onclick=()=>{const t=curTote();if(t)openToteNameModal('rename',t.name)};
+  $('coverToteBtn').onclick=()=>$('coverToteFile').click();
+  $('coverToteFile').onchange=async e=>{
+    const file=e.target.files?.[0];e.target.value='';
+    if(!file||!activeToteId)return;
+    if(!file.type.startsWith('image/')){setStatus('sealedStatus','Please choose an image file.');return}
+    try{
+      setStatus('sealedStatus','Uploading cover image…');
+      const url=await uploadCardPhoto(file);
+      const {error}=await supabaseClient.from('family_sealed_totes').update({cover_image:url}).eq('id',activeToteId).eq('family_id',signedInUser.id);
+      if(error)throw error;
+      const t=curTote();if(t)t.cover_image=url;
+      $('activeToteCover').classList.remove('hidden');
+      $('activeToteCover').src=url;
+      setStatus('sealedStatus','Cover image saved.');
+    }catch(err){setStatus('sealedStatus','Could not use that image: '+err.message)}
+  };
+
+  // -------- sealed product search INSIDE the active tote --------
+  const runSealedSearch=async()=>{
+    if(!activeToteId){setStatus('sealedSearchStatus','Open a tote first.');return}
+    const q=$('sealedQuery').value.trim();if(!q)return;
+    const statusId='sealedSearchStatus',resultsId='sealedSearchResults';
+    setStatus(statusId,'Searching TCG API…');$(resultsId).innerHTML='';
+    try{
+      const upstreamQuery='q='+encodeURIComponent(q)+'&game=pokemon';
+      const r=await fetch(SEALED_API+'?path='+encodeURIComponent('/search')+'&query='+encodeURIComponent(upstreamQuery));
+      if(!r.ok){
+        let detail='';
+        try{const j=await r.json();detail=j.error||j.message||JSON.stringify(j).slice(0,200);}catch(_){}
+        throw new Error('HTTP '+r.status+(detail?' — '+detail:''));
+      }
+      const data=await r.json();
+      const all=data.data||data.results||[];
+      const results=all.filter(p=>p.product_type==='Sealed Products');
+      if(!results.length){setStatus(statusId,'No sealed products found for "'+q+'".');return}
+      setStatus(statusId,'Found '+results.length+' result'+(results.length===1?'':'s')+'. Click one to add it to this tote.');
+      for(const p of results){
+        const b=document.createElement('button');b.type='button';b.className='result';
+        const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=p.image_url||p.image||'';
+        img.onerror=()=>{img.style.display='none'};
+        const name=document.createElement('strong');name.textContent=p.name||'Unknown';
+        const detail=document.createElement('small');detail.textContent=[p.set_name,p.product_type].filter(Boolean).join(' · ');
+        b.append(img,name,detail);
+        b.onclick=()=>addSealedToActiveTote(p);
+        $(resultsId).append(b);
+      }
+    }catch(err){console.error(err);setStatus(statusId,'Search failed: '+err.message)}
+  };
+  $('sealedSearchBtn').onclick=runSealedSearch;
+  $('sealedQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runSealedSearch();}});
+
+  async function addSealedToActiveTote(p){
+    if(!activeToteId)return;
+    const price=p.market_price!=null?Number(p.market_price):(p.price!=null?Number(p.price):null);
+    const row={family_id:signedInUser.id,tote_id:activeToteId,product_id:String(p.id||p.product_id||''),name:p.name,set_name:p.set_name||null,image_url:p.image_url||p.image||null,market_price:price,market_updated:price!=null?new Date().toISOString():null};
+    const {data,error}=await supabaseClient.from('family_sealed_products').insert(row).select('*').single();
+    if(error){setStatus('sealedSearchStatus','Could not add: '+error.message);return}
+    setStatus('sealedSearchStatus','Added '+p.name+' to this tote.');
+    $('sealedQuery').value='';$('sealedSearchResults').innerHTML='';
+    if(typeof loadSealedProducts==='function')loadSealedProducts(activeToteId);
   }
 
-  const escapeHtml=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  // -------- refresh prices for the active tote --------
+  $('toteRefreshBtn').onclick=async()=>{
+    if(!activeToteId)return;
+    if(typeof refreshSealedPrices==='function')await refreshSealedPrices(activeToteId);
+  };
 
-  // Reload totes after sign-in and when navigating
-  const _origShowTotes=showTotes;
-  showTotes=function(){_origShowTotes.apply(this,arguments);loadTotes()};
+  // -------- wire into sign-in / sign-out --------
   const _origShowSealed=showSealed;
-  showSealed=function(){_origShowSealed.apply(this,arguments);if(typeof loadSealed==='function')loadSealed()};
+  showSealed=function(){
+    $('toteDetailView').classList.add('hidden');
+    _origShowSealed.apply(this,arguments);
+    loadTotes();
+  };
+  const _origUpdateAuthUi=updateAuthUi;
+  updateAuthUi=function(){
+    _origUpdateAuthUi.apply(this,arguments);
+    if(!signedInUser){$('toteDetailView').classList.add('hidden');}
+  };
 }catch(err){console.error('Sealed totes patch failed:',err)}
 </script></body></html>
