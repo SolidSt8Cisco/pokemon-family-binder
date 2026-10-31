@@ -2602,6 +2602,7 @@ try{
   window.SEALED_API=SEALED_API;
   window.refreshSealedPrices=refreshSealedPrices;
   window.loadSealedProducts=loadSealedProducts;
+  window.renderSealed=renderSealed;
   // Optional: opening a sealed item shows a small detail modal
   function openSealedItem(it){
     const price=sealedCache[it.id]?.price ?? (it.market_price!=null?Number(it.market_price):null);
@@ -2785,14 +2786,22 @@ try{
   $('sealedQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runSealedSearch();}});
 
   async function addSealedToActiveTote(p){
-    if(!activeToteId)return;
+    if(!activeToteId){setStatus('sealedSearchStatus','Open a tote first.');return}
     const price=p.market_price!=null?Number(p.market_price):(p.price!=null?Number(p.price):null);
     const row={family_id:signedInUser.id,tote_id:activeToteId,product_id:String(p.id||p.product_id||''),name:p.name,set_name:p.set_name||null,image_url:p.image_url||p.image||null,market_price:price,market_updated:price!=null?new Date().toISOString():null};
     const {data,error}=await supabaseClient.from('family_sealed_products').insert(row).select('*').single();
-    if(error){setStatus('sealedSearchStatus','Could not add: '+error.message);return}
+    if(error){console.error('Sealed insert failed:',error);setStatus('sealedSearchStatus','Could not add: '+error.message);return}
     setStatus('sealedSearchStatus','Added '+p.name+' to this tote.');
     $('sealedQuery').value='';$('sealedSearchResults').innerHTML='';
-    if(typeof loadSealedProducts==='function')loadSealedProducts(activeToteId);
+    // Re-render the tote's grid using the shared functions from the sealed patch
+    if(typeof window.loadSealedProducts==='function'){
+      await window.loadSealedProducts(activeToteId);
+    } else if(typeof window.renderSealed==='function'){
+      window.renderSealed();
+    }
+    // Refresh the tote count shown on the sealed homepage
+    const t=curTote();
+    if(t)t.count=(t.count||0)+1;
   }
 
   // -------- refresh prices for the active tote --------
