@@ -2599,6 +2599,9 @@ try{
     renderSealed();
     setStatus('sealedStatus','Sealed prices updated ('+ok+' of '+sealedItems.length+').');
   }
+  window.SEALED_API=SEALED_API;
+  window.refreshSealedPrices=refreshSealedPrices;
+  window.loadSealedProducts=loadSealedProducts;
   // Optional: opening a sealed item shows a small detail modal
   function openSealedItem(it){
     const price=sealedCache[it.id]?.price ?? (it.market_price!=null?Number(it.market_price):null);
