@@ -979,6 +979,7 @@ document.addEventListener('keydown',e=>{
   else if($('deleteModal').classList.contains('open'))closeDeleteModal();
   else if($('nameModal').classList.contains('open'))closeNameModal();
   else if($('cardModal').classList.contains('open'))closeCardModal();
+  else if(typeof window.dismissSealedUndo==='function')window.dismissSealedUndo();
 });
 
 /* ---------- Import / Export ---------- */
@@ -2516,12 +2517,80 @@ try{
         it.tote_id=tote_id;
         setStatus('sealedStatus','Assigned to '+(tote_id?(totes.find(x=>x.id===tote_id)?.name||'tote'):'no tote')+'.');
       };
-      footer.append(name,sub,toteSel);tile.append(footer);
+      // Footer intentionally omitted — same as card slots, no text over the image.
+      // tile.append(footer);  ← deliberately not called
       tile.onclick=()=>openSealedItem(it);
-      const del=document.createElement('button');del.type='button';del.className='tile-delete';del.textContent='×';del.title='Remove';
-      del.onclick=async(ev)=>{ev.stopPropagation();if(!confirm('Remove "'+it.name+'"?'))return;const {error}=await supabaseClient.from('family_sealed_products').delete().eq('id',it.id).eq('family_id',signedInUser.id);if(error){alert(error.message);return}sealedItems=sealedItems.filter(x=>x.id!==it.id);renderSealed();};
+      const del=document.createElement('button');del.type='button';del.className='tile-delete';del.textContent='×';del.title='Remove';del.setAttribute('aria-label','Remove '+it.name);
+      del.onclick=(ev)=>{ev.stopPropagation();deleteSealedWithUndo(it);};
       wrap.append(tile,del);grid.append(wrap);
     }
+  }
+
+  // ---- Delete a sealed product with undo (mirrors deleteCardWithUndo) ----
+  let lastDeletedSealed=null;
+
+  async function deleteSealedWithUndo(it){
+    if(!it || !signedInUser) return;
+    // Snapshot the full row so undo can restore it exactly (same id, same tote).
+    const snapshot={...it};
+    const {error}=await supabaseClient.from('family_sealed_products').delete().eq('id',it.id).eq('family_id',signedInUser.id);
+    if(error){setStatus('sealedStatus','Could not remove: '+error.message);return}
+    sealedItems=sealedItems.filter(x=>x.id!==it.id);
+    renderSealed();
+    lastDeletedSealed=snapshot;
+    showSealedUndoBar();
+  }
+
+  function showSealedUndoBar(){
+    let bar=document.getElementById('sealedUndoBar');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='sealedUndoBar';
+      bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom));z-index:20;background:#26364a;border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 20px #000a';
+      const msg=document.createElement('span');msg.id='sealedUndoMsg';msg.style.cssText='color:var(--text);font-size:.9rem;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      const btn=document.createElement('button');btn.type='button';btn.textContent='Undo';btn.style.cssText='background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700;padding:6px 12px';
+      btn.onclick=undoSealedDelete;
+      const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label','Dismiss');close.onclick=dismissSealedUndo;close.style.padding='4px 9px';
+      bar.append(msg,btn,close);
+      document.body.append(bar);
+    }
+    document.getElementById('sealedUndoMsg').textContent='Removed '+lastDeletedSealed.name;
+    bar.style.display='flex';
+    clearTimeout(showSealedUndoBar._t);
+    showSealedUndoBar._t=setTimeout(dismissSealedUndo,10000);
+  }
+
+  function dismissSealedUndo(){
+    lastDeletedSealed=null;
+    const bar=document.getElementById('sealedUndoBar');if(bar)bar.style.display='none';
+  }
+
+  async function undoSealedDelete(){
+    if(!lastDeletedSealed || !signedInUser) return;
+    const row=lastDeletedSealed;
+    // Reinsert with the original id so it goes back into the same tote position.
+    const {data,error}=await supabaseClient.from('family_sealed_products')
+      .insert({
+        id:row.id,
+        family_id:row.family_id,
+        tote_id:row.tote_id,
+        product_id:row.product_id,
+        name:row.name,
+        set_name:row.set_name,
+        image_url:row.image_url,
+        market_price:row.market_price,
+        market_updated:row.market_updated,
+        added_at:row.added_at
+      })
+      .select('*')
+      .single();
+    if(error){setStatus('sealedStatus','Could not undo: '+error.message);dismissSealedUndo();return}
+    sealedItems.push(data);
+    // Keep the grid sorted the way it was (by added_at ascending)
+    sealedItems.sort((a,b)=>new Date(a.added_at)-new Date(b.added_at));
+    dismissSealedUndo();
+    renderSealed();
+    setStatus('sealedStatus','Restored '+row.name+'.');
   }
 
   // -- Search TCG API for sealed products --
@@ -2603,6 +2672,7 @@ try{
   window.refreshSealedPrices=refreshSealedPrices;
   window.loadSealedProducts=loadSealedProducts;
   window.renderSealed=renderSealed;
+  window.dismissSealedUndo=dismissSealedUndo;
   // Optional: opening a sealed item shows a small detail modal
   function openSealedItem(it){
     const price=sealedCache[it.id]?.price ?? (it.market_price!=null?Number(it.market_price):null);
