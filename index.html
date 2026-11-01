@@ -70,8 +70,6 @@
 <div class="panel hidden" id="backfillPanel"><p class="sub" style="margin:0 0 8px" id="backfillMsg"></p><button id="backfillBtn" type="button" class="primary" style="width:auto;padding:10px 16px">Fill missing card details</button><p id="backfillStatus" class="status" aria-live="polite" style="margin-top:8px"></p></div>
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
-<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
-<div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
 <section id="cartView" class="hidden">
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><button id="cartBackBtn" type="button" class="icon-row-btn">← Back</button><button id="cartClearBtn" type="button" class="danger" style="margin-left:auto">Clear trip</button></div>
 <h2>Shopping cart</h2>
@@ -111,6 +109,45 @@ const CART_OWNERS=['Dad','Everly','Eli'];
 let cartOwner='Dad';
 let cartItems=[];
 const blankCards=()=>Array(9).fill(null);
+/* ============================================================================
+   MONKEY-PATCH WRAP ORDER — DO NOT REORDER OR DELETE BLOCKS BLINDLY.
+   Later <script> blocks wrap earlier globals. Current chain (top → bottom):
+     renderLibrary:     market → owners → manual-value-badge → retry
+     renderCards:       no-price → manual-value-badge
+     showLibrary:       manual-value → no-price → price-sync → owners → manual-value-badge → retry
+     openCardModal:     price-paid → market → manual-value → manual-value-badge
+     pkbMarket.refreshUI: no-price → manual-value-badge → retry
+   If you add/remove a patch, update this list. Deleting a middle block silently
+   skips its loader (manual values, owners, price sync) on the next navigation.
+   ============================================================================ */
+// Shared TCGplayer price picker. Used by cart, market value, trade history, and retry patches.
+// Tries market → mid → low within the first variant that has any price, so a card with only
+// a low price still gets a value (matches the behavior cart/market used to have).
+const TCG_VARIANT_ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
+function pickTcgplayerMarketPrice(tp){
+  if(!tp||typeof tp!=='object')return null;
+  const grab=v=>{
+    if(!v||typeof v!=='object')return null;
+    const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);
+    return p!=null&&Number(p)>0?Number(p):null;
+  };
+  for(const k of TCG_VARIANT_ORDER){const p=grab(tp[k]);if(p!=null)return p}
+  for(const k of Object.keys(tp)){const p=grab(tp[k]);if(p!=null)return p}
+  return null;
+}
+// Same, but for pokemontcg.io's tcgplayer.prices shape (market/mid only historically,
+// but we now also accept low so the fallback matches TCGdex).
+function pickPokemontcgMarketPrice(prices){
+  if(!prices||typeof prices!=='object')return null;
+  const grab=v=>{
+    if(!v||typeof v!=='object')return null;
+    const p=v.market!=null?v.market:(v.mid!=null?v.mid:(v.low!=null?v.low:null));
+    return p!=null&&Number(p)>0?Number(p):null;
+  };
+  for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=grab(prices[k]);if(p!=null)return p}
+  for(const k of Object.keys(prices)){const p=grab(prices[k]);if(p!=null)return p}
+  return null;
+}
 function setStatus(id,msg){$(id).textContent=msg}
 function currentBinder(){return binders.find(b=>b.id===activeBinderId)||null}
 function currentPage(){const b=currentBinder();return b?b.pages[activePageIndex]||null:null}
@@ -145,7 +182,12 @@ for(const x of shown){
     row.onclick=()=>openCardModal(x.card);
     list.append(row)}
 }
-$('collQuery').addEventListener('input',renderCollection);
+$('collQuery').addEventListener('input',()=>{
+  // If a button view (Duplicates / Price I Paid) is active and the user starts
+  // typing, drop the highlight first so the list reflects the query.
+  if(typeof window.pkbClearCollView==='function'&&$('collQuery').value.trim())window.pkbClearCollView();
+  renderCollection();
+});
 
 /* ---------- Card lightbox ---------- */
 function openCardModal(card){
@@ -317,17 +359,23 @@ async function doBuyIntoBinder(binderId){
   const btn=$('binderPickCancelBtn');btn.disabled=true;
   try{
     const card={id:it.card_id,name:it.card_name,image:it.image_url,setName:it.set_name||'',localId:it.local_id||'',purchasePrice:it.shelf_price!=null?Number(it.shelf_price):null};
-    const wasActive=activeBinderId;
-    activeBinderId=b.id;
-    addToNextBlank(card);
-    saveBinderSoon();
-    activeBinderId=wasActive;
+    // Guard: if this exact card is already in the target binder (e.g. a previous
+    // tap added it but the cart-row delete failed), don't add a second copy.
+    const alreadyInBinder=b.pages.some(p=>p.cards.some(c=>c&&String(c.id)===String(card.id)));
+    let landed=null;
+    if(!alreadyInBinder){
+      const wasActive=activeBinderId;
+      activeBinderId=b.id;
+      landed=addToNextBlank(card);
+      saveBinderSoon();
+      activeBinderId=wasActive;
+    }
     const {error}=await supabaseClient.from('family_shopping_cart').delete().eq('id',it.id).eq('family_id',signedInUser.id);
     if(error)throw new Error('Card added to binder, but cart cleanup failed: '+error.message);
     cartItems=cartItems.filter(x=>x.id!==it.id);
     closeBinderPickModal();
     renderCart();
-    setStatus('cartStatus','Bought '+it.card_name+' → added to '+b.name+'.');
+    setStatus('cartStatus','Bought '+it.card_name+' → added to '+b.name+(landed?' (page '+landed.page+', pocket '+landed.slot+')':'')+'.');
   }catch(err){
     console.error(err);
     setStatus('cartStatus','Could not finish buy: '+(err.message||'unknown error'));
@@ -353,7 +401,20 @@ function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const
   wrap.append(btn,del);
   grid.append(wrap);
 }const add=document.createElement('button');add.type='button';add.className='binder-tile add-tile';add.innerHTML='<span class="plus" aria-hidden="true">+</span><span class="add-label">Add binder</span>';add.onclick=()=>openNameModal('create','New Pokémon Binder');grid.append(add)}
-function renderBinder(){const b=currentBinder();if(!b){showLibrary();return}while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();if(!b.pages.length)b.pages=[{pageNumber:1,cards:blankCards()}];activePageIndex=Math.min(Math.max(0,activePageIndex),b.pages.length-1);$('activeBinderName').textContent=b.name;$('activeCover').classList.toggle('hidden',!b.cover_image);if(b.cover_image)$('activeCover').src=b.cover_image;renderCards();$('pageLabel').textContent=`Page ${activePageIndex+1} of ${b.pages.length}`;$('prevPageBtn').disabled=activePageIndex===0;$('nextPageBtn').disabled=activePageIndex>=b.pages.length-1;}
+function renderBinder(){const b=currentBinder();if(!b){showLibrary();return}
+// Pure render: only trim a trailing empty page when there is no save in flight.
+// The authoritative trim happens in pushBinder() before it builds pageRows.
+if(!pendingSave)while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();
+if(!b.pages.length)b.pages=[{pageNumber:1,cards:blankCards()}];
+activePageIndex=Math.min(Math.max(0,activePageIndex),b.pages.length-1);
+$('activeBinderName').textContent=b.name;
+$('activeCover').classList.toggle('hidden',!b.cover_image);
+if(b.cover_image)$('activeCover').src=b.cover_image;
+renderCards();
+$('pageLabel').textContent=`Page ${activePageIndex+1} of ${b.pages.length}`;
+$('prevPageBtn').disabled=activePageIndex===0;
+$('nextPageBtn').disabled=activePageIndex>=b.pages.length-1;
+}
 function renderCards(){const grid=$('cardGrid');grid.innerHTML='';const p=currentPage();if(!p)return;p.cards.forEach((card,i)=>{const slot=document.createElement('div');slot.className='slot'+(card?'':' empty');slot.setAttribute('aria-label',card?`${card.name}, slot ${i+1}`:`Empty slot ${i+1}`);if(card){const imgBtn=document.createElement('button');imgBtn.type='button';imgBtn.style.cssText='display:block;width:100%;height:100%;padding:0;border:none;background:transparent;cursor:zoom-in';const img=document.createElement('img');img.className='card-img';img.src=card.image;img.alt=card.name;img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='contain';img.onerror=()=>{img.alt='Card image unavailable';img.style.display='none'};imgBtn.append(img);imgBtn.onclick=()=>openCardModal(card);slot.append(imgBtn);if(card.purchasePrice!=null){const chip=document.createElement('span');chip.className='purchase-chip';chip.textContent='$'+Number(card.purchasePrice).toFixed(2);slot.append(chip)}const tools=document.createElement('div');tools.className='cardtools';const remove=document.createElement('button');remove.textContent='×';remove.title='Remove card';remove.setAttribute('aria-label','Remove '+card.name);remove.onclick=()=>deleteCardWithUndo(i);tools.append(remove);slot.append(tools);const label=document.createElement('div');label.className='slotlabel';label.textContent=card.name;slot.append(label)}grid.append(slot)})}
 async function loadLibrary(){if(!signedInUser)return;setStatus('authStatus','Loading your family binders from the cloud…');try{const [{data:rows,error:e1},{data:pageRows,error:e2},{data:cardRows,error:e3}]=await Promise.all([supabaseClient.from('family_binders').select('id,family_id,name,cover_image,is_default,sort_order,created_at').eq('family_id',signedInUser.id).order('sort_order').order('created_at'),supabaseClient.from('family_binder_pages').select('binder_id,page_number').eq('family_id',signedInUser.id).order('page_number'),supabaseClient.from('family_binder_cards').select('binder_id,page_number,slot_number,card_id,card_name,image_url,set_name,local_id,purchase_price').eq('family_id',signedInUser.id).order('page_number').order('slot_number')]);if(e1)throw e1;if(e2)throw e2;if(e3)throw e3;binders=(rows||[]).map(r=>({...r,pages:[]}));for(const b of binders){const pageNums=new Set([1]);for(const p of pageRows||[])if(p.binder_id===b.id)pageNums.add(normalizePageNumber(p.page_number));for(const c of cardRows||[])if(c.binder_id===b.id)pageNums.add(normalizePageNumber(c.page_number));b.pages=Array.from(pageNums).sort((a,b)=>a-b).map(pageNumber=>({pageNumber,cards:blankCards()}));for(const c of cardRows||[]){if(c.binder_id!==b.id)continue;const p=b.pages.find(x=>x.pageNumber===c.page_number);if(p&&c.slot_number>=1&&c.slot_number<=9)p.cards[c.slot_number-1]={id:c.card_id,name:c.card_name,image:c.image_url,setName:c.set_name||'',localId:c.local_id||'',purchasePrice:c.purchase_price!=null?Number(c.purchase_price):null}}}await loadCart();updateAuthUi();showLibrary();setStatus('authStatus','Signed in. Your family binders are ready.')}catch(e){console.error(e);setStatus('authStatus','Could not load binders: '+(e.message||'check that the new database setup has completed.'));}}
 async function createBinder(clean){
@@ -391,7 +452,50 @@ function setSaveDot(state){
   else {dot.title='Saved'}
 }
 function saveBinderSoon(message){const b=currentBinder();if(!b)return;if(message)setStatus('binderStatus',message);pendingSave=true;setSaveDot('saving');clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
-async function pushBinder(binderId){if(!signedInUser)return;const b=binders.find(x=>x.id===binderId);if(!b)return;if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}cloudBusy=true;setSaveDot('saving');try{const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));if(pageRows.length){const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});if(error)throw error}const desired=[];for(const p of b.pages)p.cards.forEach((card,i)=>{if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image,set_name:card.setName||null,local_id:card.localId||null,purchase_price:card.purchasePrice!=null?Number(card.purchasePrice):null})});if(desired.length){const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});if(error)throw error}const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(readError)throw readError;const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);if(error)throw error}const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);if(pageReadError)throw pageReadError;const wantedPages=new Set(b.pages.map(p=>p.pageNumber));for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);if(error)throw error}}catch(e){console.error(e);setSaveDot('error');setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'))}finally{cloudBusy=false;pendingSave=false;if(!$('saveDot').classList.contains('error'))setSaveDot('saved')}}
+async function pushBinder(binderId){
+  if(!signedInUser)return;
+  const b=binders.find(x=>x.id===binderId);
+  if(!b)return;
+  if(cloudBusy){saveTimers[binderId]=setTimeout(()=>pushBinder(binderId),500);return}
+  cloudBusy=true;setSaveDot('saving');
+  try{
+    // Authoritative trim: never persist a trailing empty page.
+    while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();
+    const pageRows=b.pages.map(p=>({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber}));
+    if(pageRows.length){
+      const {error}=await supabaseClient.from('family_binder_pages').upsert(pageRows,{onConflict:'family_id,binder_id,page_number'});
+      if(error)throw error;
+    }
+    const desired=[];
+    for(const p of b.pages)p.cards.forEach((card,i)=>{
+      if(card)desired.push({family_id:signedInUser.id,binder_id:b.id,page_number:p.pageNumber,slot_number:i+1,card_id:String(card.id||''),card_name:card.name,image_url:card.image,set_name:card.setName||null,local_id:card.localId||null,purchase_price:card.purchasePrice!=null?Number(card.purchasePrice):null});
+    });
+    if(desired.length){
+      const {error}=await supabaseClient.from('family_binder_cards').upsert(desired,{onConflict:'family_id,binder_id,page_number,slot_number'});
+      if(error)throw error;
+    }
+    const {data:existing,error:readError}=await supabaseClient.from('family_binder_cards').select('page_number,slot_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);
+    if(readError)throw readError;
+    const wanted=new Set(desired.map(r=>r.page_number+':'+r.slot_number));
+    for(const row of existing||[])if(!wanted.has(row.page_number+':'+row.slot_number)){
+      const {error}=await supabaseClient.from('family_binder_cards').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number).eq('slot_number',row.slot_number);
+      if(error)throw error;
+    }
+    const {data:existingPages,error:pageReadError}=await supabaseClient.from('family_binder_pages').select('page_number').eq('family_id',signedInUser.id).eq('binder_id',b.id);
+    if(pageReadError)throw pageReadError;
+    const wantedPages=new Set(b.pages.map(p=>p.pageNumber));
+    for(const row of existingPages||[])if(!wantedPages.has(row.page_number)){
+      const {error}=await supabaseClient.from('family_binder_pages').delete().eq('family_id',signedInUser.id).eq('binder_id',b.id).eq('page_number',row.page_number);
+      if(error)throw error;
+    }
+  }catch(e){
+    console.error(e);setSaveDot('error');
+    setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'));
+  }finally{
+    cloudBusy=false;pendingSave=false;
+    if(!$('saveDot').classList.contains('error'))setSaveDot('saved');
+  }
+}
 
 /* ---------- Unsaved-changes guard ---------- */
 async function flushPendingSave(){
@@ -506,14 +610,7 @@ function renderOwnerChips(){
 function extractPrice(full){
   const tp=full.pricing?.tcgplayer;
   if(!tp)return null;
-  const variants=['normal','holofoil','reverse-holofoil','1st-edition','unlimited'];
-  let value=null;
-  for(const v of variants){
-    const block=tp[v];
-    if(!block)continue;
-    const p=block.marketPrice??block.midPrice??block.lowPrice;
-    if(p!=null&&p>0){value=p;break}
-  }
+  const value=pickTcgplayerMarketPrice(tp);
   if(value==null)return null;
   let updated=null;
   const raw=tp.updated;
@@ -1187,14 +1284,7 @@ try{
   try{cache=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){cache={}}
   const saveCache=()=>{try{localStorage.setItem(KEY,JSON.stringify(cache))}catch(e){}};
   const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
-  const ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
-  const pickPrice=full=>{
-    const tp=full&&full.pricing&&full.pricing.tcgplayer;if(!tp)return null;
-    const val=v=>{if(!v||typeof v!=='object')return null;const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);return p!=null&&Number(p)>0?Number(p):null};
-    for(const k of ORDER){const p=val(tp[k]);if(p!=null)return p}
-    for(const k of Object.keys(tp)){const p=val(tp[k]);if(p!=null)return p}
-    return null;
-  };
+  const pickPrice=full=>pickTcgplayerMarketPrice(full&&full.pricing&&full.pricing.tcgplayer);
   const allCards=b=>b.pages.flatMap(p=>p.cards.filter(c=>c&&c.id));
     window.pkbManual=window.pkbManual||{};
   const binderTotals=b=>{
@@ -1261,13 +1351,7 @@ try{
     // Backup source for cards TCGdex has no price for (pokemontcg.io, also TCGplayer market prices)
   const info={};
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-  const ptcgPick=card=>{
-    const pr=card&&card.tcgplayer&&card.tcgplayer.prices;if(!pr)return null;
-    const get=v=>{const p=v&&(v.market!=null?v.market:v.mid);return p!=null&&Number(p)>0?Number(p):null};
-    for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=get(pr[k]);if(p!=null)return p}
-    for(const k of Object.keys(pr)){const p=get(pr[k]);if(p!=null)return p}
-    return null;
-  };
+  const ptcgPick=card=>pickPokemontcgMarketPrice(card&&card.tcgplayer&&card.tcgplayer.prices);
   let lastFb=0;
   const fallbackPriceInner=async c=>{ // number = price, null = not found, undefined = couldn't check (try again later)
     if(!c||!c.name||!c.localId)return null;
@@ -1386,14 +1470,24 @@ try{
   const redraw=()=>{if(window.pkbMarket&&window.pkbMarket.refreshUI)window.pkbMarket.refreshUI()};
   const msg=t=>{$('manualMsg').textContent=t};
 
+  // Load manual values once per session and expose a promise other patches can await.
+  // Guards against stale badges/totals rendering before values arrive.
+  let manualLoading=null;
   const loadManual=async()=>{
-    if(!signedInUser)return;
-    const {data,error}=await supabaseClient.from('family_card_values').select('card_id,manual_value').eq('family_id',signedInUser.id);
-    if(error){console.warn('Manual values not loaded:',error.message);return}
-    for(const k of Object.keys(manual))delete manual[k];
-    for(const r of data||[])manual[String(r.card_id)]=Number(r.manual_value);
-    redraw();
+    if(!signedInUser){window.pkbManualReady=Promise.resolve();return}
+    if(manualLoading)return manualLoading;
+    manualLoading=(async()=>{
+      const {data,error}=await supabaseClient.from('family_card_values').select('card_id,manual_value').eq('family_id',signedInUser.id);
+      if(error){console.warn('Manual values not loaded:',error.message);return}
+      for(const k of Object.keys(manual))delete manual[k];
+      for(const r of data||[])manual[String(r.card_id)]=Number(r.manual_value);
+      redraw();
+    })();
+    window.pkbManualReady=manualLoading;
+    try{await manualLoading}finally{manualLoading=null;window.pkbManualReady=Promise.resolve()}
   };
+  // First call kicks off the load; subsequent calls reuse the in-flight promise.
+  window.pkbManualReady=Promise.resolve();
   const prevSL=showLibrary;
   showLibrary=function(){prevSL.apply(this,arguments);loadManual()};
 
@@ -1474,7 +1568,7 @@ try{
   renderCards=function(){origRC.apply(this,arguments);badges()};
 
   // Button on the home screen + list pop-up
-  $('valSub').insertAdjacentHTML('afterend','<button id="noPriceBtn" type="button" class="hidden" style="margin-top:8px;border-color:#e5484d">🔴 Show cards without a price</button>');
+  $('valSub').insertAdjacentHTML('afterend','<div id="valButtonsRow" class="row" style="margin-top:8px;gap:8px"><button id="noPriceBtn" type="button" class="hidden" style="border-color:#e5484d">🔴 Show cards without a price</button></div>');
   document.body.insertAdjacentHTML('beforeend','<div class="modal" id="noPriceModal" role="dialog" aria-modal="true" aria-labelledby="noPriceTitle"><div class="dialog"><div class="dialoghead"><h2 id="noPriceTitle">Cards without a price</h2><button class="close" id="noPriceClose" aria-label="Close">×</button></div><p class="sub" id="noPriceSub"></p><div id="noPriceList" class="list"></div></div></div>');
   const closeList=()=>$('noPriceModal').classList.remove('open');
   const updateLink=()=>{
@@ -1515,6 +1609,9 @@ try{
   new MutationObserver(refreshAll).observe($('valStatus'),{childList:true,characterData:true,subtree:true});
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
+  if(window.pkbManualReady&&window.pkbManualReady.then){
+    window.pkbManualReady.then(()=>refreshAll()).catch(()=>{});
+  }
 }catch(err){console.error('No-price flag patch failed:',err)}
 </script><script>
 /* PATCH: sync market prices between devices through Supabase. Needs the market-value patch. To undo: delete this whole <script> block. */
@@ -1595,14 +1692,7 @@ try{
   const ageOf=c=>{const e=mk().cache&&mk().cache[String(c.id)];return e?Date.now()-e.t:null};
   const isStale=c=>{if(!mk().cache||hasManual(c))return false;const a=ageOf(c);return a==null||a>FRESH};
   const ageText=c=>{if(hasManual(c))return 'your value';const a=ageOf(c);if(a==null)return 'never checked';const hr=Math.round(a/3600000);return hr<1?'updated just now':hr<48?'updated '+hr+'h ago':'updated '+Math.floor(hr/24)+'d ago'};
-  const ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
-  const pickT=full=>{
-    const tp=full&&full.pricing&&full.pricing.tcgplayer;if(!tp)return null;
-    const g=v=>{if(!v||typeof v!=='object')return null;const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);return p!=null&&Number(p)>0?Number(p):null};
-    for(const k of ORDER){const p=g(tp[k]);if(p!=null)return p}
-    for(const k of Object.keys(tp)){const p=g(tp[k]);if(p!=null)return p}
-    return null;
-  };
+  const pickT=full=>pickTcgplayerMarketPrice(full&&full.pricing&&full.pricing.tcgplayer);
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const backup=async c=>{ // pokemontcg.io; returns a price or null
     if(!c||!c.name||!c.localId)return null;
@@ -1614,8 +1704,7 @@ try{
       clearTimeout(to);if(!r.ok)return null;
       let list=((await r.json()).data)||[];
       if(list.length>1&&c.setName){const w=normS(c.setName),m=list.filter(x=>x.set&&normS(x.set.name)===w);if(m.length)list=m}
-      const pick=card=>{const pr=card&&card.tcgplayer&&card.tcgplayer.prices;if(!pr)return null;const g=v=>{const p=v&&(v.market!=null?v.market:v.mid);return p!=null&&Number(p)>0?Number(p):null};for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=g(pr[k]);if(p!=null)return p}for(const k of Object.keys(pr)){const p=g(pr[k]);if(p!=null)return p}return null};
-      const prices=list.map(pick).filter(p=>p!=null);
+      const prices=list.map(card=>pickPokemontcgMarketPrice(card&&card.tcgplayer&&card.tcgplayer.prices)).filter(p=>p!=null);
       return prices.length&&prices.every(p=>p===prices[0])?prices[0]:null;
     }catch(e){return null}
   };
@@ -1746,6 +1835,29 @@ try{
     else if(act==='upd')updateStale();
     else if(act==='cont'){if(st.sel.a.concat(st.sel.b).some(c=>val(c)==null)){phase='novalue';render()}else complete()}
     else if(act==='force')complete();
+    else if(act==='retry-save'){
+      // Rollback retry: push both binders again. If both succeed, drop the box.
+      const box=$('tradeRetryBox');
+      if(box){box.querySelectorAll('button').forEach(b=>b.disabled=true);box.insertAdjacentHTML('beforeend','<p class="status" id="tradeRetryMsg" aria-live="polite">Retrying…</p>')}
+      (async()=>{
+        const failed=()=>$('saveDot').classList.contains('error');
+        try{
+          const ids=st.retryIds||[];
+          if(!ids.length)throw new Error('Nothing to retry.');
+          while(cloudBusy)await sleep(200);
+          await pushBinder(ids[0]);
+          let good=!failed();
+          if(good&&ids[1]){while(cloudBusy)await sleep(200);await pushBinder(ids[1]);good=!failed()}
+          const msg=$('tradeRetryMsg');
+          if(good){ if(box)box.remove(); say('Saving finished. Your binders and the cloud now match.'); }
+          else if(msg){msg.textContent='Still not saved. Check your connection, then retry again or close and check manually.';msg.style.color='#ff9b9b';box.querySelectorAll('button').forEach(b=>b.disabled=false)}
+        }catch(e){
+          const msg=$('tradeRetryMsg');
+          if(msg){msg.textContent='Retry failed: '+(e.message||'unknown error');msg.style.color='#ff9b9b'}
+          if(box)box.querySelectorAll('button').forEach(b=>b.disabled=false);
+        }
+      })();
+    }
   });
   $('tradeBody').addEventListener('change',async e=>{
     const t=e.target;
@@ -1790,8 +1902,13 @@ try{
     if(!ok){
       restore(A,sA);restore(B,sB);
       try{while(cloudBusy)await sleep(200);await pushBinder(A.id);await pushBinder(B.id)}catch(e){}
-      say('The trade did not finish and was not logged. Your binders were put back as they were. Reload and check both binders to be sure.');
-      lock(false);return;
+      // Rollback re-push also failed. Offer a retry instead of "reload and check".
+      const retryHtml='<p class="sub" style="margin:0 0 8px"><strong>The trade did not finish and was not logged.</strong> Your binders were put back the way they were. Retry saving now to make sure the cloud matches what you see.</p>'+
+        '<div class="row" style="justify-content:flex-end"><button type="button" data-act="retry-save">Retry saving</button><button type="button" data-act="close">Close and check manually</button></div>';
+      st.retryIds=[A.id,B.id];
+      $('tradeBody').insertAdjacentHTML('beforeend','<div id="tradeRetryBox" class="panel" style="border-color:#ff8a8a;margin-top:10px">'+retryHtml+'</div>');
+      lock(false);
+      return;
     }
     const cr=c=>({id:String(c.id),n:c.name,s:c.setName||'',l:c.localId||'',v:val(c)});
     const {error}=await supabaseClient.from('family_trades').insert({a_owner:(window.pkbOwners||{})[A.id]||null,b_owner:(window.pkbOwners||{})[B.id]||null,family_id:signedInUser.id,traded_on:st.date,binder_a_id:A.id,binder_a_name:A.name,binder_b_id:B.id,binder_b_name:B.name,a_gave:outA.map(cr),b_gave:outB.map(cr),note:st.note||null});
@@ -1804,7 +1921,7 @@ try{
 
   $('tradeBtn').onclick=()=>{
     phase=null;
-    Object.assign(st,{a:binders[0]?binders[0].id:null,b:binders[1]?binders[1].id:null,sel:{a:[],b:[]},view:'build',side:'a',date:todayStr(),note:'',doneMsg:''});
+    Object.assign(st,{a:binders[0]?binders[0].id:null,b:binders[1]?binders[1].id:null,sel:{a:[],b:[]},view:'build',side:'a',date:todayStr(),note:'',doneMsg:'',retryIds:null});
     render();$('tradeModal').classList.add('open');
   };
   $('tradeClose').onclick=closeTrade;
@@ -2073,7 +2190,7 @@ try{
   // A button + modal that lists them all, next to "Show cards without a price"
   const haveBtn=$('noPriceBtn');
   if(haveBtn){
-    haveBtn.insertAdjacentHTML('afterend','<button id="manualValueBtn" type="button" class="hidden" style="margin-top:8px;margin-left:8px;border-color:#ffd34e">💰 Show cards with your own value</button>');
+    haveBtn.insertAdjacentHTML('afterend','<button id="manualValueBtn" type="button" class="hidden" style="border-color:#ffd34e">💰 Show cards with your own value</button>');
     document.body.insertAdjacentHTML('beforeend','<div class="modal" id="manualValueModal" role="dialog" aria-modal="true" aria-labelledby="manualValueTitle"><div class="dialog"><div class="dialoghead"><h2 id="manualValueTitle">Cards with your own value</h2><button class="close" id="manualValueClose" aria-label="Close">×</button></div><p class="sub" id="manualValueSub"></p><div id="manualValueList" class="list"></div></div></div>');
   }
 
@@ -2136,6 +2253,11 @@ try{
   renderLibrary=function(){origRL.apply(this,arguments);refreshButton()};
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
+  // When the manual-values load finishes (see the manual-value patch), re-render
+  // so badges and the "Show cards with your own value" count are accurate.
+  if(window.pkbManualReady&&window.pkbManualReady.then){
+    window.pkbManualReady.then(()=>{refreshAll();refreshButton()}).catch(()=>{});
+  }
 }catch(err){console.error('Manual value badge patch failed:',err)}
 </script><script>
 /* PATCH: "Retry missing prices" button — re-checks ONLY cards whose market price
@@ -2148,22 +2270,9 @@ try{
   // Same variant order + price picking as the market-value patch, kept local so
   // this block doesn't depend on the patch IIFE's internal helpers.
   const API='https://api.tcgdex.net/v2/en/cards/';
-  const ORDER=['normal','holofoil','reverse-holofoil','1st-edition-holofoil','1st-edition','unlimited-holofoil','unlimited','holo','reverse'];
-  const pickPrice=full=>{
-    const tp=full&&full.pricing&&full.pricing.tcgplayer;if(!tp)return null;
-    const g=v=>{if(!v||typeof v!=='object')return null;const p=v.marketPrice!=null?v.marketPrice:(v.midPrice!=null?v.midPrice:v.lowPrice);return p!=null&&Number(p)>0?Number(p):null};
-    for(const k of ORDER){const p=g(tp[k]);if(p!=null)return p}
-    for(const k of Object.keys(tp)){const p=g(tp[k]);if(p!=null)return p}
-    return null;
-  };
+  const pickPrice=full=>pickTcgplayerMarketPrice(full&&full.pricing&&full.pricing.tcgplayer);
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-  const ptcgPick=card=>{
-    const pr=card&&card.tcgplayer&&card.tcgplayer.prices;if(!pr)return null;
-    const g=v=>{const p=v&&(v.market!=null?v.market:v.mid);return p!=null&&Number(p)>0?Number(p):null};
-    for(const k of ['normal','holofoil','reverseHolofoil','1stEditionHolofoil','1stEditionNormal','unlimitedHolofoil','unlimited']){const p=g(pr[k]);if(p!=null)return p}
-    for(const k of Object.keys(pr)){const p=g(pr[k]);if(p!=null)return p}
-    return null;
-  };
+  const ptcgPick=card=>pickPokemontcgMarketPrice(card&&card.tcgplayer&&card.tcgplayer.prices);
   let lastFb=0;
   let fallbackChain=Promise.resolve(); // serialize all fallback calls across workers
   const fallbackPriceInner=async c=>{
@@ -2208,10 +2317,11 @@ try{
     const anchor=$(anchorId);if(!anchor||$(id))return;
     const b=document.createElement('button');
     b.id=id;b.type='button';
-    // Match the anchor button's size, but keep a small left gap so the two don't touch
-    b.style.cssText='margin-left:6px';
-    b.style.padding=getComputedStyle(anchor).padding;
-    b.style.fontSize=getComputedStyle(anchor).fontSize;
+    // Match the anchor button's size using the same inline style attributes the
+    // anchor was authored with, if any. Falling back to the default button style
+    // keeps it consistent with the flex row's gap rather than a forced margin.
+    b.style.padding=anchor.style.padding||'';
+    b.style.fontSize=anchor.style.fontSize||'';
     b.textContent='Retry (0)';
     b.title='Re-check only the cards that currently have no market price';
     anchor.insertAdjacentElement('afterend',b);
@@ -2385,11 +2495,8 @@ try{
     setActive('paid');showPaid();
   };
 
-  // If the user starts typing, drop the button highlight and let normal search take over
-  $('collQuery').addEventListener('input',()=>{
-    if(!$('collQuery').value.trim())return;
-    setActive(null);
-    // normal renderCollection handler already rebuilds the list on input
-  });
+  // Expose the "clear the button view" action so the single input listener in the
+  // main script can call it. Avoids two competing `input` listeners on #collQuery.
+  window.pkbClearCollView=()=>{setActive(null)};
 }catch(err){console.error('Collection buttons patch failed:',err)}
 </script></body></html>
