@@ -89,6 +89,7 @@
 <div class="panel" style="margin-top:12px"><form id="inlineSearchForm" class="searchrow" style="margin:0"><input id="inlineQuery" class="field" type="search" placeholder="Search by Pokémon or card name…" autocomplete="off"><button type="submit">Search</button></form><p id="inlineSearchStatus" class="status" aria-live="polite"></p><div id="inlineResults" class="results"></div></div>
 <div class="pagebar"><div class="group"><button id="prevPageBtn" type="button">← Previous</button><button id="nextPageBtn" type="button">Next →</button></div><strong id="pageLabel">Page 1 of 1</strong></div><section class="grid" id="cardGrid" aria-label="Nine card binder slots"></section><p id="binderStatus" class="status" aria-live="polite"></p></section>
 <div class="row" style="justify-content:center;gap:10px;margin-top:32px;padding-top:16px;border-top:1px solid var(--line)"><button id="exportBtn" type="button">Export backup</button><button id="importBtn" type="button">Import backup</button><input id="importFile" type="file" accept=".json,application/json" class="hidden"><button id="signOutBtn" type="button" class="hidden">Sign out</button></div>
+<div id="globalSaveChip" class="hidden" aria-live="polite" style="position:fixed;left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));z-index:15;background:#26364a;border:1px solid var(--line);border-radius:999px;padding:8px 14px;box-shadow:0 6px 20px #000a;font-size:.85rem;display:flex;gap:8px;align-items:center;max-width:calc(100vw - 24px)"><span id="globalSaveMsg">Saving…</span><button id="globalSaveRetry" type="button" class="hidden" style="padding:4px 10px;font-size:.8rem">Retry</button></div>
 </main>
 <div class="modal" id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"><div class="dialog" style="width:min(520px,100%);text-align:center"><div class="dialoghead"><h2 id="cardModalTitle">Card</h2><button class="close" id="closeCardBtn" aria-label="Close">×</button></div><img id="cardModalImg" alt="" style="width:100%;max-height:70dvh;object-fit:contain;border-radius:10px;background:#111a26;margin-top:12px"><p id="cardModalMeta" class="note" style="margin-top:10px"></p></div></div>
 <div class="modal" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle"><div class="dialog" style="width:min(440px,100%)"><div class="dialoghead"><h2 id="nameModalTitle">Binder name</h2><button class="close" id="closeNameBtn" aria-label="Close">×</button></div><form id="nameForm" style="margin-top:12px"><input id="nameInput" class="field" type="text" maxlength="80" autocomplete="off" required><p id="nameError" class="status" style="color:#ff9b9b" aria-live="polite"></p><div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" id="nameCancelBtn">Cancel</button><button type="submit" id="nameSaveBtn" class="primary" style="width:auto;padding:10px 18px">Save</button></div></form></div></div>
@@ -101,6 +102,9 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_r5qzENvZgLryyZK_QKSwbQ_C19GIhj_';
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const $=id=>document.getElementById(id);
 let signedInUser=null, binders=[], activeBinderId=null, activePageIndex=0, lastFocus=null, cloudBusy=false, saveTimers={}, pendingSave=false;
+// Per-binder dirty set. pendingSave remains for backwards-compat but is derived
+// from this set so the existing beforeunload / visibility guards still work.
+const dirtyBinders=new Set();
 let lastDeleted=null;
 let nameModalMode=null;
 let pendingDeleteId=null;
@@ -404,7 +408,7 @@ function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const
 function renderBinder(){const b=currentBinder();if(!b){showLibrary();return}
 // Pure render: only trim a trailing empty page when there is no save in flight.
 // The authoritative trim happens in pushBinder() before it builds pageRows.
-if(!pendingSave)while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();
+if(!dirtyBinders.has(b.id))while(b.pages.length>1&&b.pages[b.pages.length-1].cards.every(c=>!c))b.pages.pop();
 if(!b.pages.length)b.pages=[{pageNumber:1,cards:blankCards()}];
 activePageIndex=Math.min(Math.max(0,activePageIndex),b.pages.length-1);
 $('activeBinderName').textContent=b.name;
@@ -450,8 +454,28 @@ function setSaveDot(state){
   if(state==='saving'){dot.classList.add('saving');dot.title='Saving…'}
   else if(state==='error'){dot.classList.add('error');dot.title='Save failed'}
   else {dot.title='Saved'}
+  updateGlobalSaveChip(state);
 }
-function saveBinderSoon(message){const b=currentBinder();if(!b)return;if(message)setStatus('binderStatus',message);pendingSave=true;setSaveDot('saving');clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
+// Global chip so a pending/failed save is visible on any screen (library, cart).
+// The save dot lives inside #binderView and is invisible elsewhere.
+function updateGlobalSaveChip(state){
+  const chip=$('globalSaveChip'),msg=$('globalSaveMsg'),retry=$('globalSaveRetry');
+  if(!chip||!msg||!retry)return;
+  const dirty=typeof dirtyBinders!=='undefined'?dirtyBinders.size:0;
+  if(state==='error'){
+    chip.classList.remove('hidden');
+    msg.textContent=dirty>1?('Save failed for '+dirty+' binders.'):'Save failed.';
+    retry.classList.remove('hidden');
+  } else if(state==='saving'||dirty>0){
+    chip.classList.remove('hidden');
+    msg.textContent='Saving…';
+    retry.classList.add('hidden');
+  } else {
+    chip.classList.add('hidden');
+    retry.classList.add('hidden');
+  }
+}
+function saveBinderSoon(message){const b=currentBinder();if(!b)return;if(message)setStatus('binderStatus',message);dirtyBinders.add(b.id);pendingSave=true;setSaveDot('saving');clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>pushBinder(b.id),650)}
 async function pushBinder(binderId){
   if(!signedInUser)return;
   const b=binders.find(x=>x.id===binderId);
@@ -492,18 +516,21 @@ async function pushBinder(binderId){
     console.error(e);setSaveDot('error');
     setStatus('binderStatus','Cloud save failed: '+(e.message||'check database permissions and RLS policies'));
   }finally{
-    cloudBusy=false;pendingSave=false;
+    cloudBusy=false;
+    // Only clear this binder's dirty flag; another binder may still be pending.
+    if(!$('saveDot').classList.contains('error'))dirtyBinders.delete(binderId);
+    pendingSave=dirtyBinders.size>0;
     if(!$('saveDot').classList.contains('error'))setSaveDot('saved');
   }
 }
 
 /* ---------- Unsaved-changes guard ---------- */
 async function flushPendingSave(){
-  const ids=Object.keys(saveTimers);
-  for(const id of ids){clearTimeout(saveTimers[id]);delete saveTimers[id]}
-  if(pendingSave){
-    const b=currentBinder();
-    if(b){try{await pushBinder(b.id)}catch(e){console.warn('Flush failed:',e)}}
+  // Clear pending timers, then push every binder still marked dirty.
+  for(const id of Object.keys(saveTimers)){clearTimeout(saveTimers[id]);delete saveTimers[id]}
+  const ids=[...dirtyBinders];
+  for(const id of ids){
+    try{await pushBinder(id)}catch(e){console.warn('Flush failed for',id,e)}
   }
 }
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&pendingSave)flushPendingSave()});
@@ -1092,7 +1119,18 @@ $('importFile').onchange=async e=>{
 };
 
 $('authForm').addEventListener('submit',async e=>{e.preventDefault();$('signInBtn').disabled=true;setStatus('authStatus','Signing in…');try{const {data,error}=await supabaseClient.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;signedInUser=data.user;updateAuthUi();await loadLibrary()}catch(err){setStatus('authStatus','Sign-in failed: '+(err.message||'check email and password'))}finally{$('signInBtn').disabled=false}});
-$('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUser=null;binders=[];activeBinderId=null;cartItems=[];updateAuthUi();setStatus('authStatus','Signed out. Sign in again to view the family binders.')};
+$('signOutBtn').onclick=async()=>{await supabaseClient.auth.signOut();signedInUser=null;binders=[];activeBinderId=null;cartItems=[];dirtyBinders.clear();pendingSave=false;updateAuthUi();setStatus('authStatus','Signed out. Sign in again to view the family binders.')};
+$('globalSaveRetry').onclick=async()=>{
+  const retry=$('globalSaveRetry');
+  retry.disabled=true;
+  try{await flushPendingSave()}
+  catch(e){console.warn('Retry save failed:',e)}
+  finally{
+    retry.disabled=false;
+    // flushPendingSave pushes each dirty binder; on success they leave the set.
+    updateGlobalSaveChip(dirtyBinders.size>0?'saving':'saved');
+  }
+};
 document.addEventListener('input',e=>{
   if(e.target.id==='inlineQuery'&&!e.target.value.trim()){
     $('inlineResults').innerHTML='';
@@ -1880,10 +1918,14 @@ try{
   const snap=b=>b.pages.map(p=>({pageNumber:p.pageNumber,cards:p.cards.slice()}));
   const restore=(b,s)=>{b.pages=s.map(p=>({pageNumber:p.pageNumber,cards:p.cards.slice()}))};
   const relayout=(b,keep)=>{
+    // Match sortBinderAlphabetically: name then id. This keeps a card's pocket
+    // consistent whether it arrived by search-add, buy, or trade.
     keep.sort(cmp);
     const need=Math.max(1,Math.ceil(keep.length/9));
     while(b.pages.length<need)b.pages.push({pageNumber:Math.max(0,...b.pages.map(p=>p.pageNumber))+1,cards:blankCards()});
-    b.pages=b.pages.slice(0,need);
+    // Preserve the first `need` existing pages (in their current order) rather
+    // than truncating, so rollback snapshots still describe the right shape.
+    while(b.pages.length>need)b.pages.pop();
     b.pages.forEach((p,pi)=>{p.cards=blankCards();for(let i=0;i<9;i++)p.cards[i]=keep[pi*9+i]||null});
   };
   const lock=v=>document.querySelectorAll('#tradeBody button').forEach(b=>b.disabled=v);
