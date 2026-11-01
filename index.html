@@ -12,6 +12,10 @@
 .icon-row-btn svg{display:block}
 .tile-wrap .tile-delete{position:absolute;top:5px;right:5px;z-index:2;padding:5px 8px;background:#111c2ddd;border-color:#718198;color:var(--text)}
 .tile-wrap .tile-delete:hover{background:var(--danger);border-color:var(--danger)}
+.tile-wrap .tile-move{position:absolute;bottom:5px;z-index:2;padding:4px 9px;background:#111c2ddd;border-color:#718198;color:var(--text);font-size:.9rem;line-height:1;min-height:0;border-radius:8px}
+.tile-wrap .tile-move:hover{background:var(--accent);border-color:var(--accent);color:#101722}
+.tile-wrap .tile-move.left{left:5px}
+.tile-wrap .tile-move.right{right:5px}
 .save-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4caf6a;opacity:.75;transition:background .2s,opacity .2s;flex:none}
 .save-dot.saving{background:var(--accent);opacity:1;animation:pulse 1s ease-in-out infinite}
 .save-dot.error{background:var(--danger);opacity:1}
@@ -393,7 +397,8 @@ async function doBuyIntoBinder(binderId){
   }
 }
 
-function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const binder of binders){
+function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(let i=0;i<binders.length;i++){
+  const binder=binders[i];
   const count=binder.pages.reduce((n,p)=>n+p.cards.filter(Boolean).length,0);
   const btn=document.createElement('button');btn.type='button';btn.className='binder-tile';btn.setAttribute('aria-label','Open '+binder.name);
   if(binder.cover_image){const img=document.createElement('img');img.src=binder.cover_image;img.alt='';img.loading='lazy';btn.append(img)}
@@ -408,8 +413,50 @@ function renderLibrary(){const grid=$('libraryGrid');grid.innerHTML='';for(const
   del.onclick=(ev)=>{ev.stopPropagation();openDeleteModal(binder.id)};
   const wrap=document.createElement('div');wrap.className='tile-wrap';
   wrap.append(btn,del);
+  // Move-left: only for binders that are not first in the lineup.
+  if(i>0){
+    const left=document.createElement('button');left.type='button';left.className='tile-move left';left.textContent='◀';
+    left.title='Move left in the lineup';left.setAttribute('aria-label','Move '+binder.name+' left');
+    left.onclick=(ev)=>{ev.stopPropagation();moveBinder(i,-1)};
+    wrap.append(left);
+  }
+  // Move-right: only for binders that are not last in the lineup.
+  if(i<binders.length-1){
+    const right=document.createElement('button');right.type='button';right.className='tile-move right';right.textContent='▶';
+    right.title='Move right in the lineup';right.setAttribute('aria-label','Move '+binder.name+' right');
+    right.onclick=(ev)=>{ev.stopPropagation();moveBinder(i,1)};
+    wrap.append(right);
+  }
   grid.append(wrap);
 }const add=document.createElement('button');add.type='button';add.className='binder-tile add-tile';add.innerHTML='<span class="plus" aria-hidden="true">+</span><span class="add-label">Add binder</span>';add.onclick=()=>openNameModal('create','New Pokémon Binder');grid.append(add)}
+// Move a binder one position in the lineup. Swaps sort_order with the neighbor
+// (so sort_order stays meaningful), updates Supabase, then re-renders the grid.
+async function moveBinder(index,delta){
+  if(!signedInUser)return;
+  const target=index+delta;
+  if(target<0||target>=binders.length)return;
+  const a=binders[index],b=binders[target];
+  const aSort=a.sort_order,bSort=b.sort_order;
+  // Optimistic local swap so the UI responds instantly.
+  a.sort_order=bSort;b.sort_order=aSort;
+  binders.sort((x,y)=>Number(x.sort_order)-Number(y.sort_order));
+  renderLibrary();
+  // Persist. If either update fails, put the old order back and re-render.
+  try{
+    const [ra,rb]=await Promise.all([
+      supabaseClient.from('family_binders').update({sort_order:a.sort_order}).eq('id',a.id).eq('family_id',signedInUser.id),
+      supabaseClient.from('family_binders').update({sort_order:b.sort_order}).eq('id',b.id).eq('family_id',signedInUser.id)
+    ]);
+    if(ra.error)throw ra.error;
+    if(rb.error)throw rb.error;
+  }catch(err){
+    console.error('Reorder failed:',err);
+    a.sort_order=aSort;b.sort_order=bSort;
+    binders.sort((x,y)=>Number(x.sort_order)-Number(y.sort_order));
+    renderLibrary();
+    setStatus('libraryStatus','Could not move that binder: '+(err.message||'database error'));
+  }
+}
 function renderBinder(){const b=currentBinder();if(!b){showLibrary();return}
 // Pure render: only trim a trailing empty page when there is no save in flight.
 // The authoritative trim happens in pushBinder() before it builds pageRows.
@@ -425,7 +472,17 @@ $('prevPageBtn').disabled=activePageIndex===0;
 $('nextPageBtn').disabled=activePageIndex>=b.pages.length-1;
 }
 function renderCards(){const grid=$('cardGrid');grid.innerHTML='';const p=currentPage();if(!p)return;p.cards.forEach((card,i)=>{const slot=document.createElement('div');slot.className='slot'+(card?'':' empty');slot.setAttribute('aria-label',card?`${card.name}, slot ${i+1}`:`Empty slot ${i+1}`);if(card){const imgBtn=document.createElement('button');imgBtn.type='button';imgBtn.style.cssText='display:block;width:100%;height:100%;padding:0;border:none;background:transparent;cursor:zoom-in';const img=document.createElement('img');img.className='card-img';img.src=card.image;img.alt=card.name;img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='contain';img.onerror=()=>{img.alt='Card image unavailable';img.style.display='none'};imgBtn.append(img);imgBtn.onclick=()=>openCardModal(card);slot.append(imgBtn);if(card.purchasePrice!=null){const chip=document.createElement('span');chip.className='purchase-chip';chip.textContent='$'+Number(card.purchasePrice).toFixed(2);slot.append(chip)}const tools=document.createElement('div');tools.className='cardtools';const remove=document.createElement('button');remove.textContent='×';remove.title='Remove card';remove.setAttribute('aria-label','Remove '+card.name);remove.onclick=()=>deleteCardWithUndo(i);tools.append(remove);slot.append(tools);const label=document.createElement('div');label.className='slotlabel';label.textContent=card.name;slot.append(label)}grid.append(slot)})}
-async function loadLibrary(){if(!signedInUser)return;setStatus('authStatus','Loading your family binders from the cloud…');try{const [{data:rows,error:e1},{data:pageRows,error:e2},{data:cardRows,error:e3}]=await Promise.all([supabaseClient.from('family_binders').select('id,family_id,name,cover_image,is_default,sort_order,created_at').eq('family_id',signedInUser.id).order('sort_order').order('created_at'),supabaseClient.from('family_binder_pages').select('binder_id,page_number').eq('family_id',signedInUser.id).order('page_number'),supabaseClient.from('family_binder_cards').select('binder_id,page_number,slot_number,card_id,card_name,image_url,set_name,local_id,purchase_price').eq('family_id',signedInUser.id).order('page_number').order('slot_number')]);if(e1)throw e1;if(e2)throw e2;if(e3)throw e3;binders=(rows||[]).map(r=>({...r,pages:[]}));for(const b of binders){const pageNums=new Set([1]);for(const p of pageRows||[])if(p.binder_id===b.id)pageNums.add(normalizePageNumber(p.page_number));for(const c of cardRows||[])if(c.binder_id===b.id)pageNums.add(normalizePageNumber(c.page_number));b.pages=Array.from(pageNums).sort((a,b)=>a-b).map(pageNumber=>({pageNumber,cards:blankCards()}));for(const c of cardRows||[]){if(c.binder_id!==b.id)continue;const p=b.pages.find(x=>x.pageNumber===c.page_number);if(p&&c.slot_number>=1&&c.slot_number<=9)p.cards[c.slot_number-1]={id:c.card_id,name:c.card_name,image:c.image_url,setName:c.set_name||'',localId:c.local_id||'',purchasePrice:c.purchase_price!=null?Number(c.purchase_price):null}}}await loadCart();updateAuthUi();showLibrary();setStatus('authStatus','Signed in. Your family binders are ready.')}catch(e){console.error(e);setStatus('authStatus','Could not load binders: '+(e.message||'check that the new database setup has completed.'));}}
+async function loadLibrary(){if(!signedInUser)return;setStatus('authStatus','Loading your family binders from the cloud…');try{const [{data:rows,error:e1},{data:pageRows,error:e2},{data:cardRows,error:e3}]=await Promise.all([supabaseClient.from('family_binders').select('id,family_id,name,cover_image,is_default,sort_order,created_at').eq('family_id',signedInUser.id).order('sort_order').order('created_at'),supabaseClient.from('family_binder_pages').select('binder_id,page_number').eq('family_id',signedInUser.id).order('page_number'),supabaseClient.from('family_binder_cards').select('binder_id,page_number,slot_number,card_id,card_name,image_url,set_name,local_id,purchase_price').eq('family_id',signedInUser.id).order('page_number').order('slot_number')]);if(e1)throw e1;if(e2)throw e2;if(e3)throw e3;binders=(rows||[]).map(r=>({...r,pages:[]}));
+// Normalize sort_order so every binder has a distinct position. Older data or
+// imports may have left ties, which makes swapping arrows appear to do nothing.
+let needsResave=false;
+binders.forEach((b,i)=>{if(Number(b.sort_order)!==i){b.sort_order=i;needsResave=true}});
+if(needsResave){
+  // Fire-and-forget: local order is already correct; the DB catches up next save.
+  Promise.all(binders.map(b=>
+    supabaseClient.from('family_binders').update({sort_order:b.sort_order}).eq('id',b.id).eq('family_id',signedInUser.id)
+  )).catch(err=>console.warn('sort_order normalize failed:',err));
+}for(const b of binders){const pageNums=new Set([1]);for(const p of pageRows||[])if(p.binder_id===b.id)pageNums.add(normalizePageNumber(p.page_number));for(const c of cardRows||[])if(c.binder_id===b.id)pageNums.add(normalizePageNumber(c.page_number));b.pages=Array.from(pageNums).sort((a,b)=>a-b).map(pageNumber=>({pageNumber,cards:blankCards()}));for(const c of cardRows||[]){if(c.binder_id!==b.id)continue;const p=b.pages.find(x=>x.pageNumber===c.page_number);if(p&&c.slot_number>=1&&c.slot_number<=9)p.cards[c.slot_number-1]={id:c.card_id,name:c.card_name,image:c.image_url,setName:c.set_name||'',localId:c.local_id||'',purchasePrice:c.purchase_price!=null?Number(c.purchase_price):null}}}await loadCart();updateAuthUi();showLibrary();setStatus('authStatus','Signed in. Your family binders are ready.')}catch(e){console.error(e);setStatus('authStatus','Could not load binders: '+(e.message||'check that the new database setup has completed.'));}}
 async function createBinder(clean){
   if(!signedInUser)throw new Error('You are not signed in.');
   setStatus('libraryStatus','Creating binder…');
