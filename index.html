@@ -120,7 +120,9 @@ const blankCards=()=>Array(9).fill(null);
      renderCards:       no-price → manual-value-badge
      showLibrary:       manual-value → no-price → price-sync → owners → manual-value-badge → retry
      openCardModal:     price-paid → market → manual-value → manual-value-badge
-     pkbMarket.refreshUI: no-price → manual-value-badge → retry
+   pkbMarket.refreshUI is NOT wrapped — patches register via window.pkbAddRefreshHook(fn)
+   instead, and refreshUI() runs decorate(), updatePanel(), then all hooks. Current
+   hook order is registration order: no-price → manual-value-badge → retry.
    If you add/remove a patch, update this list. Deleting a middle block silently
    skips its loader (manual values, owners, price sync) on the next navigation.
    ============================================================================ */
@@ -362,9 +364,16 @@ async function doBuyIntoBinder(binderId){
   if(!it||!b){closeBinderPickModal();return}
   const btn=$('binderPickCancelBtn');btn.disabled=true;
   try{
+    // Delete the cart row FIRST. If this fails, nothing has changed yet.
+    const {error:cartErr}=await supabaseClient.from('family_shopping_cart').delete().eq('id',it.id).eq('family_id',signedInUser.id);
+    if(cartErr)throw new Error('Could not remove from cart: '+cartErr.message);
+    cartItems=cartItems.filter(x=>x.id!==it.id);
+    renderCart();
+
+    // Then add to the binder. If the binder save later fails, the user still has
+    // the card in the cart history view (trade history) and the pocket location,
+    // and there is no duplicate risk if they re-search and add manually.
     const card={id:it.card_id,name:it.card_name,image:it.image_url,setName:it.set_name||'',localId:it.local_id||'',purchasePrice:it.shelf_price!=null?Number(it.shelf_price):null};
-    // Guard: if this exact card is already in the target binder (e.g. a previous
-    // tap added it but the cart-row delete failed), don't add a second copy.
     const alreadyInBinder=b.pages.some(p=>p.cards.some(c=>c&&String(c.id)===String(card.id)));
     let landed=null;
     if(!alreadyInBinder){
@@ -374,11 +383,7 @@ async function doBuyIntoBinder(binderId){
       saveBinderSoon();
       activeBinderId=wasActive;
     }
-    const {error}=await supabaseClient.from('family_shopping_cart').delete().eq('id',it.id).eq('family_id',signedInUser.id);
-    if(error)throw new Error('Card added to binder, but cart cleanup failed: '+error.message);
-    cartItems=cartItems.filter(x=>x.id!==it.id);
     closeBinderPickModal();
-    renderCart();
     setStatus('cartStatus','Bought '+it.card_name+' → added to '+b.name+(landed?' (page '+landed.page+', pocket '+landed.slot+')':'')+'.');
   }catch(err){
     console.error(err);
@@ -520,7 +525,8 @@ async function pushBinder(binderId){
     // Only clear this binder's dirty flag; another binder may still be pending.
     if(!$('saveDot').classList.contains('error'))dirtyBinders.delete(binderId);
     pendingSave=dirtyBinders.size>0;
-    if(!$('saveDot').classList.contains('error'))setSaveDot('saved');
+    // Only show the local "Saved" dot when nothing else is still pending.
+    if(!$('saveDot').classList.contains('error'))setSaveDot(dirtyBinders.size>0?'saving':'saved');
   }
 }
 
@@ -563,6 +569,11 @@ $('backfillBtn').onclick=async()=>{
   const btn=$('backfillBtn');
   btn.disabled=true;
   try{
+    // Don't race the binder save. If anything is still dirty, flush first.
+    if(dirtyBinders.size>0){
+      setStatus('backfillStatus','Saving pending binder changes first…');
+      await flushPendingSave();
+    }
     const {data:rows,error}=await supabaseClient.from('family_binder_cards')
       .select('family_id,binder_id,page_number,slot_number,card_id,set_name,local_id')
       .eq('family_id',signedInUser.id)
@@ -1119,6 +1130,7 @@ $('importFile').onchange=async e=>{
     }
     renderLibrary();renderCollection();
     refreshBackfillPanel();
+    setStatus('libraryStatus',`Imported ${importedBinders} binder${importedBinders===1?'':'s'}, ${importedCards} card${importedCards===1?'':'s'}${importedCovers?' ('+importedCovers+' with covers)':''}.`);
   }catch(err){
     console.error(err);
     setStatus('libraryStatus','Import failed: '+(err.message||'unknown error'));
@@ -1254,8 +1266,14 @@ try{
       $('valSub').textContent=parts.join(' · ');
     }
   };
-  const refreshUI=()=>{decorate();updatePanel()};
-        window.pkbMarket={refreshUI,cache,saveCache,getPrice:id=>{const h=cache[id];return h?h.p:undefined},get refreshInProgress(){return refreshInProgress;}};
+  // Explicit hook list so later patches don't have to wrap refreshUI.
+  // Each patch registers window.pkbAddRefreshHook(fn); every refreshUI() call
+  // runs decorate(), updatePanel(), then every hook. Hooks may be added at any
+  // time (patches run after this block), so the list is read fresh each call.
+  const refreshHooks=window.pkbRefreshHooks=window.pkbRefreshHooks||[];
+  window.pkbAddRefreshHook=fn=>{if(typeof fn==='function'&&!refreshHooks.includes(fn))refreshHooks.push(fn)};
+  const refreshUI=()=>{decorate();updatePanel();for(const fn of refreshHooks.slice()){try{fn()}catch(e){console.warn('refresh hook failed:',e)}}};
+  window.pkbMarket={refreshUI,cache,saveCache,getPrice:id=>{const h=cache[id];return h?h.p:undefined},get refreshInProgress(){return refreshInProgress;}};
     // Backup source for cards TCGdex has no price for (pokemontcg.io, also TCGplayer market prices)
   const info={};
   const normS=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -1510,10 +1528,7 @@ try{
 
   // Keep badges and the button up to date as prices load or you save a value
   const refreshAll=()=>{badges();updateLink()};
-  if(window.pkbMarket&&window.pkbMarket.refreshUI){
-    const origUI=window.pkbMarket.refreshUI;
-    window.pkbMarket.refreshUI=function(){origUI.apply(this,arguments);refreshAll()};
-  }
+  if(window.pkbAddRefreshHook)window.pkbAddRefreshHook(refreshAll);
   new MutationObserver(refreshAll).observe($('valStatus'),{childList:true,characterData:true,subtree:true});
   const origSL=showLibrary;
   showLibrary=function(){origSL.apply(this,arguments);refreshAll()};
@@ -2154,10 +2169,7 @@ try{
 
   // Keep badges + button in sync whenever prices/values refresh
   const refreshAll=()=>{badges();refreshButton()};
-  if(window.pkbMarket&&window.pkbMarket.refreshUI){
-    const origUI=window.pkbMarket.refreshUI;
-    window.pkbMarket.refreshUI=function(){origUI.apply(this,arguments);refreshAll()};
-  }
+  if(window.pkbAddRefreshHook)window.pkbAddRefreshHook(refreshAll);
   // And whenever you save a manual value in the lightbox (the manual patch sets window.pkbManual)
   const origOpen=openCardModal;
   openCardModal=function(card){origOpen.apply(this,arguments);refreshAll()};
@@ -2299,13 +2311,8 @@ try{
   if(btn2)btn2.onclick=retryMissing;
 
   // Keep the "(N)" count in sync as prices change elsewhere
-  if(mk.refreshUI){
-    const orig=mk.refreshUI;
-    mk.refreshUI=function(){orig.apply(this,arguments);refreshCount()};
-  }
-  // Also expose a way to force a recount once the refresh finishes
-  const origSetStatus=setStatus;
-  // (refreshPrices calls setStatus('valStatus','Prices updated.') at the end)
+  if(window.pkbAddRefreshHook)window.pkbAddRefreshHook(refreshCount);
+  // Recount when refreshPrices() finishes (it sets this exact status text).
   new MutationObserver(()=>{
     if($('valStatus').textContent==='Prices updated.')refreshCount();
   }).observe($('valStatus'),{childList:true,characterData:true,subtree:true});
