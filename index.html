@@ -31,6 +31,12 @@
 .owner-chip{display:inline-block;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:#111b28;color:var(--text);cursor:pointer;font:inherit;font-size:.9rem}
 .owner-chip.active{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700}
 .coll-btn.active{background:var(--accent);color:#101722;border-color:var(--accent);font-weight:700}
+.dupe-filter-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
+.dupe-filter-row.hidden{display:none}
+.dupe-filter-row .dupe-filter-label{color:var(--muted);font-size:.82rem;margin-right:2px}
+.dupe-filter-chip{padding:4px 10px;font-size:.8rem;border-radius:999px;background:#26364a;border:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit}
+.dupe-filter-chip.off{background:transparent;color:var(--muted);border-style:dashed;text-decoration:line-through}
+.dupe-filter-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .cart-group{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:12px;overflow:hidden}
 .cart-group-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
 .cart-group-head strong{font-size:1rem}
@@ -70,7 +76,7 @@
 <main class="wrap">
 <section id="authPanel" class="panel"><h2>Sign in to your family binders</h2><p class="sub">Use the same family account on your PC and phone. After sign-in, you'll see all your binders.</p><form id="authForm" class="row"><input id="email" class="field grow" type="email" placeholder="Family account email" autocomplete="username" required><input id="password" class="field grow" type="password" placeholder="Password" autocomplete="current-password" required><button id="signInBtn" type="submit">Sign in</button></form><p id="authStatus" class="status" aria-live="polite">Your family binder library will appear here after sign-in.</p></section>
 <section id="libraryView" class="hidden">
-<div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><div class="row" style="margin-top:8px;gap:8px"><button id="dupesBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Duplicates</button><button id="paidBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Price I Paid</button></div><p id="collCount" class="status" aria-live="polite"></p><div id="collList" class="list"></div></div>
+<div class="panel"><input id="collQuery" class="field" type="search" placeholder="Search all my cards…" autocomplete="off"><div class="row" style="margin-top:8px;gap:8px"><button id="dupesBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Duplicates</button><button id="paidBtn" type="button" class="coll-btn" style="padding:5px 10px;font-size:.8rem">Price I Paid</button></div><p id="collCount" class="status" aria-live="polite"></p><div id="dupeFilterRow" class="dupe-filter-row hidden" aria-label="Filter which binders count"></div><div id="collList" class="list"></div></div>
 <div class="panel hidden" id="backfillPanel"><p class="sub" style="margin:0 0 8px" id="backfillMsg"></p><button id="backfillBtn" type="button" class="primary" style="width:auto;padding:10px 16px">Fill missing card details</button><p id="backfillStatus" class="status" aria-live="polite" style="margin-top:8px"></p></div>
 <div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="gap:10px"><button id="cartOpenBtn" type="button">🛒 Shopping cart <span id="cartCountBadge" class="badge" style="margin-left:6px">0</span></button></div></div>
 <div id="libraryGrid" class="library-grid"></div><p id="libraryStatus" class="status" aria-live="polite"></p></section>
@@ -2387,9 +2393,40 @@ try{
 try{
   const collList=$('collList');
 
+  // Binder filter for the Duplicates / Price-I-Paid views.
+  // excluded: Set of binder ids currently omitted. Empty set = all included.
+  // Reset to empty each time a button view is activated so a stale exclusion
+  // doesn't silently change the numbers on the next visit.
+  let excludedBinders=new Set();
+  const includedRows=(rows)=>rows.filter(x=>!excludedBinders.has(x.binderId));
+  const renderFilterRow=()=>{
+    const row=$('dupeFilterRow');
+    if(!row)return;
+    if(activeView!=='dupes'&&activeView!=='paid'){row.classList.add('hidden');row.innerHTML='';return}
+    row.classList.remove('hidden');
+    row.innerHTML='';
+    const lbl=document.createElement('span');lbl.className='dupe-filter-label';lbl.textContent='Count from:';row.append(lbl);
+    if(!binders.length)return;
+    for(const b of binders){
+      const chip=document.createElement('button');chip.type='button';
+      const on=!excludedBinders.has(b.id);
+      chip.className='dupe-filter-chip'+(on?'':' off');
+      chip.textContent=b.name;
+      chip.title=on?'Included — tap to omit from the count':'Omitted — tap to include again';
+      chip.setAttribute('aria-pressed',on?'true':'false');
+      chip.onclick=()=>{
+        if(excludedBinders.has(b.id))excludedBinders.delete(b.id);else excludedBinders.add(b.id);
+        renderFilterRow();
+        if(activeView==='dupes')showDupes();
+        else if(activeView==='paid')showPaid();
+      };
+      row.append(chip);
+    }
+  };
+
   const baseCollectionRows=()=>{
     const all=[];
-    for(const b of binders)for(const p of b.pages)p.cards.forEach((c,i)=>{if(c)all.push({card:c,binder:b.name,page:p.pageNumber,slot:i+1})});
+    for(const b of binders)for(const p of b.pages)p.cards.forEach((c,i)=>{if(c)all.push({card:c,binder:b.name,binderId:b.id,page:p.pageNumber,slot:i+1})});
     return all;
   };
   const ownedCounts=all=>{
@@ -2413,7 +2450,14 @@ try{
 
   // ---- Duplicates ----
   const showDupes=()=>{
-    const all=baseCollectionRows();
+    const all=includedRows(baseCollectionRows());
+    const omitted=excludedBinders.size;
+    if(!all.length&&binders.length){
+      setStatus('collCount','No binders selected. Tap a binder above to include it in the count.');
+      collList.innerHTML='';
+      renderFilterRow();
+      return;
+    }
     const map=new Map();
     for(const x of all){
       const id=String(x.card.id),e=map.get(id)||{card:x.card,total:0,by:{}};
@@ -2421,27 +2465,37 @@ try{
     }
     const list=[...map.values()].filter(e=>e.total>1).sort((a,b)=>b.total-a.total||a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
     const copies=list.reduce((n,e)=>n+e.total,0);
-    setStatus('collCount',list.length?list.length+' card'+(list.length===1?'':'s')+' you own more than once ('+copies+' copies in total)':'No duplicates found. Every card is in your binders only once.');
+    const suffix=omitted?' ('+omitted+' binder'+(omitted===1?'':'s')+' omitted)':'';
+    setStatus('collCount',list.length?list.length+' card'+(list.length===1?'':'s')+' you own more than once ('+copies+' copies in total)'+suffix:'No duplicates found'+suffix+'.');
     collList.innerHTML='';
     for(const e of list){
       const where=Object.entries(e.by).map(([k,v])=>k+(v>1?' ×'+v:'')).join(', ');
       const metaText=[e.card.setName,e.card.localId?'#'+e.card.localId:e.card.id].filter(Boolean).join(' · ')+' · '+where;
       collList.append(cardRow(e.card,metaText,'×'+e.total));
     }
+    renderFilterRow();
   };
 
   // ---- Price I paid ----
   const showPaid=()=>{
-    const all=baseCollectionRows().filter(x=>x.card.purchasePrice!=null);
+    const all=includedRows(baseCollectionRows()).filter(x=>x.card.purchasePrice!=null);
+    const omitted=excludedBinders.size;
+    if(!all.length&&binders.length&&omitted===binders.length){
+      setStatus('collCount','No binders selected. Tap a binder above to include it in the count.');
+      collList.innerHTML='';
+      renderFilterRow();
+      return;
+    }
     all.sort((a,b)=>b.card.purchasePrice-a.card.purchasePrice||a.card.name.localeCompare(b.card.name,undefined,{sensitivity:'base'}));
     const total=all.reduce((s,x)=>s+Number(x.card.purchasePrice),0);
-    setStatus('collCount',all.length?all.length+' card'+(all.length===1?'':'s')+' with a price I paid (total spent '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(total)+')':'No cards have a price I paid entered yet.');
+    const suffix=omitted?' ('+omitted+' binder'+(omitted===1?'':'s')+' omitted)':'';
+    setStatus('collCount',all.length?all.length+' card'+(all.length===1?'':'s')+' with a price I paid (total spent '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(total)+')'+suffix:'No cards have a price I paid entered yet'+suffix+'.');
     collList.innerHTML='';
-    const owned=ownedCounts(baseCollectionRows());
     for(const x of all){
       const metaText=[x.card.setName,x.card.localId?'#'+x.card.localId:x.card.id].filter(Boolean).join(' · ')+' · '+x.binder+', page '+x.page;
       collList.append(cardRow(x.card,metaText,'$'+Number(x.card.purchasePrice).toFixed(2)));
     }
+    renderFilterRow();
   };
 
    // ---- Toggle wiring ----
@@ -2458,19 +2512,22 @@ try{
     const all=baseCollectionRows();
     setStatus('collCount',`${all.length} card${all.length===1?'':'s'} in your collection. Start typing to search.`);
     collList.innerHTML='';
+    const row=$('dupeFilterRow');
+    if(row){row.classList.add('hidden');row.innerHTML=''}
   };
 
   $('dupesBtn').onclick=()=>{
     $('collQuery').value='';
-    if(activeView==='dupes'){setActive(null);clearList();return}
+    if(activeView==='dupes'){setActive(null);excludedBinders=new Set();clearList();return}
+    excludedBinders=new Set();
     setActive('dupes');showDupes();
   };
   $('paidBtn').onclick=()=>{
     $('collQuery').value='';
-    if(activeView==='paid'){setActive(null);clearList();return}
+    if(activeView==='paid'){setActive(null);excludedBinders=new Set();clearList();return}
+    excludedBinders=new Set();
     setActive('paid');showPaid();
   };
-
   // Expose the "clear the button view" action so the single input listener in the
   // main script can call it. Avoids two competing `input` listeners on #collQuery.
   window.pkbClearCollView=()=>{setActive(null)};
